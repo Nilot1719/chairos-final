@@ -272,14 +272,11 @@ export function DashboardView({
         </div>
       </header>
 
-      <main className="flex-1 min-h-0 max-w-[1280px] w-full mx-auto px-6 py-6 flex flex-col overflow-hidden">
-        <div className="mb-5 shrink-0">
-          <h1 className="font-display text-3xl sm:text-4xl font-bold tracking-tight text-slate-900">
+      <main className="flex-1 min-h-0 max-w-[1280px] w-full mx-auto px-4 sm:px-6 py-4 flex flex-col overflow-hidden">
+        <div className="mb-3 shrink-0">
+          <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">
             Welcome, {firstName}!
           </h1>
-          <p className="mt-1 text-sm text-slate-600">
-            Open an active committee, join a co-chair with a 4-character code, or build a new roster.
-          </p>
         </div>
 
         {cloudError && !isGuest && (
@@ -301,11 +298,11 @@ export function DashboardView({
           </div>
         )}
 
-        <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-12 gap-8 overflow-y-auto lg:overflow-hidden">
+        <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-12 gap-5 overflow-y-auto lg:overflow-hidden">
           {/* Left Column: Join Committee + Your Committees */}
-          <section className="lg:col-span-5 flex flex-col gap-4 lg:h-full min-h-0 overflow-hidden">
+          <section className="lg:col-span-5 flex flex-col gap-3 lg:h-full min-h-0 overflow-hidden">
             {/* Join as Co-Chair Card */}
-            <div className="bg-white border border-slate-200 rounded-xl p-4 shrink-0 space-y-3">
+            <div className="bg-white border border-slate-200 rounded-xl p-3 shrink-0 space-y-2.5">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <Users className="w-4 h-4 text-[#0047AB]" />
@@ -350,7 +347,7 @@ export function DashboardView({
                           setJoinError(null);
                         }}
                         placeholder="K7M3"
-                        className="w-full px-3 py-2 text-sm font-mono-tabular font-bold uppercase tracking-widest text-center bg-slate-50 border border-slate-200 rounded-lg text-slate-900 placeholder:text-slate-400 placeholder:font-normal placeholder:tracking-normal focus:outline-none focus:bg-white focus:border-[#0047AB]"
+                        className="w-full min-h-10 px-3 py-2 text-sm font-mono-tabular font-bold uppercase tracking-widest text-center bg-slate-50 border border-slate-200 rounded-lg text-slate-900 placeholder:text-slate-400 placeholder:font-normal placeholder:tracking-normal focus:outline-none focus:bg-white focus:border-[#0047AB]"
                       />
                     </div>
                     <div className="col-span-5 relative">
@@ -366,7 +363,7 @@ export function DashboardView({
                           setJoinError(null);
                         }}
                         placeholder="Password"
-                        className="w-full pl-3 pr-8 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg text-slate-900 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-[#0047AB]"
+                        className="w-full min-h-10 pl-3 pr-8 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg text-slate-900 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-[#0047AB]"
                       />
                       <button
                         type="button"
@@ -385,7 +382,7 @@ export function DashboardView({
                       <button
                         type="submit"
                         disabled={joining}
-                        className="w-full h-full px-3 py-2 text-xs font-semibold text-white bg-[#0047AB] hover:bg-[#003580] disabled:opacity-60 rounded-lg transition-colors whitespace-nowrap cursor-pointer"
+                        className="w-full min-h-10 px-3 py-2 text-sm font-semibold text-white bg-[#0047AB] hover:bg-[#003580] disabled:opacity-60 rounded-lg transition-colors whitespace-nowrap cursor-pointer"
                       >
                         {joining ? 'Joining...' : 'Join'}
                       </button>
@@ -428,18 +425,18 @@ export function DashboardView({
                 </p>
               </div>
             ) : (
-              <div className="flex-1 min-h-0 overflow-y-auto space-y-3 pr-1">
+              <div className="flex-1 min-h-0 overflow-y-auto space-y-2 pr-1">
                 {committees.map((com) => {
                   const isOwner = isGuest || com.ownerId === user?.uid;
                   const coChairCount = com.memberIds?.length || 1;
                   return (
                     <div
                       key={com.id}
-                      className="bg-white border border-slate-200 rounded-xl p-4 flex items-center justify-between gap-3 hover:border-slate-300 transition-colors"
+                      className="bg-white border border-slate-200 rounded-xl p-3 flex items-center justify-between gap-3 hover:border-slate-300 transition-colors"
                     >
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 min-w-0">
-                          <h3 className="font-display text-base font-semibold text-slate-900 truncate">
+                          <h3 className="font-display text-lg font-semibold text-slate-900 truncate">
                             {com.name}
                           </h3>
                           {!isOwner && (
@@ -514,7 +511,7 @@ export function DashboardView({
                             <button
                               type="button"
                               onClick={() => onEnterCommittee(com.id)}
-                              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-[#0047AB] hover:bg-[#003580] rounded-lg transition-colors whitespace-nowrap cursor-pointer"
+                              className="inline-flex min-h-10 items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-[#0047AB] hover:bg-[#003580] rounded-lg transition-colors whitespace-nowrap cursor-pointer"
                             >
                               <span>Enter</span>
                               <ArrowRight className="w-3.5 h-3.5" />
@@ -537,7 +534,7 @@ export function DashboardView({
 
             <form
               onSubmit={handleCreateSubmit}
-              className="flex-1 min-h-0 overflow-y-auto bg-white border border-slate-200 rounded-xl p-6 space-y-5"
+              className="flex-1 min-h-0 overflow-y-auto bg-white border border-slate-200 rounded-xl p-4 space-y-4"
             >
               <div>
                 <label
@@ -558,7 +555,7 @@ export function DashboardView({
               </div>
 
               {/* Co-Chair Join Code + Password */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-xl bg-slate-50 border border-slate-200">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-xl bg-slate-50 border border-slate-200">
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
                     <label
@@ -584,7 +581,7 @@ export function DashboardView({
                     value={createJoinCode}
                     onChange={(e) => setCreateJoinCode(normalizeJoinCode(e.target.value))}
                     placeholder="K7M3"
-                    className="w-full px-3.5 py-2 text-sm font-mono-tabular font-bold uppercase tracking-widest bg-white border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:border-[#0047AB]"
+                    className="w-full min-h-10 px-3.5 py-2 text-sm font-mono-tabular font-bold uppercase tracking-widest bg-white border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:border-[#0047AB]"
                   />
                   <p className="mt-1 text-[11px] text-slate-500">
                     Mixed letters &amp; numbers for co-chairs.
@@ -607,7 +604,7 @@ export function DashboardView({
                       placeholder={
                         isGuest ? 'Optional in local Guest Mode' : 'Min 4 characters...'
                       }
-                      className="w-full pl-3.5 pr-9 py-2 text-sm bg-white border border-slate-200 rounded-lg text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#0047AB]"
+                      className="w-full min-h-10 pl-3.5 pr-9 py-2 text-sm bg-white border border-slate-200 rounded-lg text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#0047AB]"
                     />
                     <button
                       type="button"
@@ -708,13 +705,13 @@ export function DashboardView({
                         }
                       }}
                       placeholder="Search country (e.g., Germany, Thailand) or type custom role..."
-                      className="w-full pl-9 pr-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-lg text-slate-900 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-[#0047AB]"
+                      className="w-full min-h-11 pl-9 pr-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-lg text-slate-900 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-[#0047AB]"
                     />
                   </div>
                   <button
                     type="button"
                     onClick={() => handleAddCountry()}
-                    className="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium text-white bg-[#0047AB] hover:bg-[#003580] rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                    className="inline-flex min-h-11 items-center gap-1.5 px-4 py-2.5 text-sm font-semibold text-white bg-[#0047AB] hover:bg-[#003580] rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
                   >
                     <Plus className="w-4 h-4" />
                     Add Country
@@ -804,7 +801,7 @@ export function DashboardView({
                 <button
                   type="submit"
                   disabled={creating}
-                  className="px-6 py-2.5 bg-[#0047AB] hover:bg-[#003580] disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition-colors cursor-pointer"
+                  className="min-h-12 px-6 py-3 bg-[#0047AB] hover:bg-[#003580] disabled:opacity-60 text-white text-base font-semibold rounded-lg transition-colors cursor-pointer"
                 >
                   {creating ? 'Creating Committee...' : 'Create Committee'}
                 </button>

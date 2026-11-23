@@ -541,13 +541,13 @@ export function CommitteeWorkspace({
     <div className="h-[100dvh] lg:h-screen overflow-hidden bg-slate-50 flex flex-col">
       {/* Top Bar (3-Zone Contract) */}
       <header className="w-full bg-white border-b border-slate-200 shrink-0 z-30">
-        <div className="px-4 sm:px-6 py-2.5 flex items-center justify-between gap-6">
+        <div className="px-3 sm:px-5 py-2 flex items-center justify-between gap-4">
           {/* Zone 1: Back + Brand/Committee Title */}
           <div className="flex items-center gap-3 min-w-0">
             <button
               type="button"
               onClick={onBackToDashboard}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+              className="inline-flex min-h-10 items-center gap-1.5 px-3 py-2 text-sm font-semibold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
               Committees
@@ -558,7 +558,7 @@ export function CommitteeWorkspace({
           </div>
 
           {/* Zone 2: Unboxed Quorum Telemetry */}
-          <div className="hidden lg:flex items-center gap-3 text-[13px] font-medium text-slate-600 tabular-nums whitespace-nowrap shrink-0">
+          <div className="hidden lg:flex items-center gap-2.5 text-sm font-medium text-slate-600 tabular-nums whitespace-nowrap shrink-0">
             {isGuest && (
               <>
                 <span className="text-[#0047AB] font-semibold">Guest Mode</span>
@@ -569,16 +569,16 @@ export function CommitteeWorkspace({
             <span aria-hidden="true" className="text-slate-300">·</span>
             <span>
               Present:{' '}
-              <strong className="font-semibold text-slate-900">
+              <strong className="text-base font-bold text-slate-900">
                 {quorum.activeTotal}/{quorum.totalDelegations}
               </strong>
             </span>
             <span aria-hidden="true" className="text-slate-300">·</span>
             <span>
               Maj ({quorum.simpleFractionLabel} / {quorum.superFractionLabel}):{' '}
-              <strong className="font-semibold text-[#0047AB]">{quorum.simpleMajority}</strong>
+              <strong className="text-base font-bold text-[#0047AB]">{quorum.simpleMajority}</strong>
               <span className="text-slate-400 mx-1">/</span>
-              <strong className="font-semibold text-slate-900">{quorum.twoThirdsMajority}</strong>
+              <strong className="text-base font-bold text-slate-900">{quorum.twoThirdsMajority}</strong>
             </span>
           </div>
 
@@ -591,7 +591,7 @@ export function CommitteeWorkspace({
                   setJoinAccessMsg(null);
                   setCoChairPopoverOpen((prev) => !prev);
                 }}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors whitespace-nowrap cursor-pointer"
+                className="inline-flex min-h-10 items-center gap-1.5 px-3 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors whitespace-nowrap cursor-pointer"
               >
                 <Users className="w-3.5 h-3.5 text-[#0047AB]" />
                 {committee.joinCode ? (
@@ -925,7 +925,7 @@ export function CommitteeWorkspace({
                     setProjectorPreparing(false);
                   }
                 }}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-[#0047AB] hover:bg-[#003580] disabled:opacity-60 rounded-lg transition-colors whitespace-nowrap cursor-pointer"
+                className="inline-flex min-h-10 items-center gap-1.5 px-3 py-2 text-sm font-semibold text-white bg-[#0047AB] hover:bg-[#003580] disabled:opacity-60 rounded-lg transition-colors whitespace-nowrap cursor-pointer"
               >
                 <MonitorPlay className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">
@@ -1010,7 +1010,7 @@ export function CommitteeWorkspace({
               <button
                 type="button"
                 onClick={() => setExportMenuOpen((prev) => !prev)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors whitespace-nowrap cursor-pointer"
+                className="inline-flex min-h-10 items-center gap-1.5 px-3 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors whitespace-nowrap cursor-pointer"
               >
                 <Download className="w-3.5 h-3.5" />
                 Export
@@ -1087,7 +1087,7 @@ export function CommitteeWorkspace({
 
         <main className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
           {/* Procedural Folder Tabs */}
-          <div className="bg-white border-b border-slate-200 px-4 sm:px-6 pt-3 flex items-center gap-1.5 overflow-x-auto shrink-0">
+          <div className="bg-white border-b border-slate-200 px-3 sm:px-5 pt-2 flex items-center gap-1 overflow-x-auto shrink-0">
             {TABS.map((tab) => {
               const isActive = activeTab === tab.key;
               return (
@@ -1095,7 +1095,7 @@ export function CommitteeWorkspace({
                   key={tab.key}
                   type="button"
                   onClick={() => handleTabChange(tab.key)}
-                  className={`px-4 py-2 text-xs sm:text-sm font-semibold rounded-t-lg border border-b-0 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                  className={`min-h-10 px-3.5 py-2 text-sm font-semibold rounded-t-lg border border-b-0 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
                     isActive
                       ? 'bg-slate-50 text-[#0047AB] border-slate-200 relative -mb-px pb-[9px]'
                       : 'bg-white text-slate-600 border-transparent hover:text-slate-900 hover:bg-slate-50'
@@ -1125,7 +1125,7 @@ export function CommitteeWorkspace({
           )}
 
           {/* Active Tab Stage (Viewport-Locked, Internal Module Scrolling) */}
-          <div className="flex-1 min-h-0 p-4 sm:p-5 overflow-hidden flex flex-col">
+          <div className="flex-1 min-h-0 p-3 sm:p-4 overflow-hidden flex flex-col">
             {activeTab === 'roll_call' && (
               <RollCallTab
                 delegates={delegates}

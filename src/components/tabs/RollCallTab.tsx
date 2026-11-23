@@ -90,16 +90,16 @@ export function RollCallTab({
   };
 
   return (
-    <div className="h-full min-h-0 flex flex-col gap-4 overflow-hidden">
+    <div className="h-full min-h-0 flex flex-col gap-3 overflow-hidden">
       {/* Session & Quorum Controls Bar */}
-      <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3.5 shrink-0">
+      <div className="bg-white border border-slate-200 rounded-xl p-3 space-y-2.5 shrink-0">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2.5">
             <select
               aria-label="Select Committee Session"
               value={activeSession?.id || ''}
               onChange={(e) => onSelectSession(e.target.value)}
-              className="px-3 py-2 text-sm font-semibold text-slate-900 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-[#0047AB] cursor-pointer"
+              className="min-h-10 px-3 py-2 text-sm font-semibold text-slate-900 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-[#0047AB] cursor-pointer"
             >
               {sessions.map((s) => (
                 <option key={s.id} value={s.id}>
@@ -112,7 +112,7 @@ export function RollCallTab({
               type="button"
               disabled={creatingSession}
               onClick={handleAddSession}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-[#0047AB] bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors whitespace-nowrap cursor-pointer"
+              className="inline-flex min-h-10 items-center gap-1.5 px-3 py-2 text-sm font-semibold text-[#0047AB] bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors whitespace-nowrap cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" />
               {creatingSession ? 'Adding...' : 'New Session'}
@@ -149,14 +149,14 @@ export function RollCallTab({
             <button
               type="button"
               onClick={() => handleBulkStatus('present')}
-              className="px-3 py-1.5 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors whitespace-nowrap cursor-pointer"
+              className="min-h-10 px-3 py-2 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors whitespace-nowrap cursor-pointer"
             >
               Mark All Present
             </button>
             <button
               type="button"
               onClick={() => handleBulkStatus('absent')}
-              className="px-3 py-1.5 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors whitespace-nowrap cursor-pointer"
+              className="min-h-10 px-3 py-2 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors whitespace-nowrap cursor-pointer"
             >
               Reset Roll Call
             </button>
@@ -209,42 +209,42 @@ export function RollCallTab({
         </form>
 
         {/* Quorum & Majority Math Strip */}
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-3 border-t border-slate-100">
-          <div className="p-2.5 bg-slate-50 rounded-lg">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-2 border-t border-slate-100">
+          <div className="p-2 bg-slate-50 rounded-lg">
             <div className="text-[11px] text-slate-500">Quorum Status</div>
             <div
-              className={`font-mono-tabular text-sm font-bold mt-0.5 ${
+              className={`font-mono-tabular text-base font-bold mt-0.5 ${
                 quorum.quorumMet ? 'text-green-700' : 'text-amber-700'
               }`}
             >
               {quorum.quorumMet ? 'MET' : 'NOT MET'} ({quorum.activeTotal}/{quorum.quorumNeeded})
             </div>
           </div>
-          <div className="p-2.5 bg-slate-50 rounded-lg">
+          <div className="p-2 bg-slate-50 rounded-lg">
             <div className="text-[11px] text-slate-500">Present / P&amp;V</div>
-            <div className="font-mono-tabular text-sm font-bold text-slate-900 mt-0.5">
+            <div className="font-mono-tabular text-base font-bold text-slate-900 mt-0.5">
               {quorum.presentCount} P · {quorum.pvCount} P&amp;V
             </div>
           </div>
-          <div className="p-2.5 bg-slate-50 rounded-lg">
+          <div className="p-2 bg-slate-50 rounded-lg">
             <div className="text-[11px] text-slate-500">Absent</div>
-            <div className="font-mono-tabular text-sm font-bold text-slate-900 mt-0.5">
+            <div className="font-mono-tabular text-base font-bold text-slate-900 mt-0.5">
               {quorum.absentCount} / {quorum.totalDelegations}
             </div>
           </div>
-          <div className="p-2.5 bg-blue-50/70 rounded-lg">
+          <div className="p-2 bg-blue-50/70 rounded-lg">
             <div className="text-[11px] text-[#0047AB] font-medium">
               Simple Majority ({quorum.simpleFractionLabel})
             </div>
-            <div className="font-mono-tabular text-sm font-bold text-[#0047AB] mt-0.5">
+            <div className="font-mono-tabular text-base font-bold text-[#0047AB] mt-0.5">
               {quorum.simpleMajority} votes
             </div>
           </div>
-          <div className="p-2.5 bg-slate-50 rounded-lg">
+          <div className="p-2 bg-slate-50 rounded-lg">
             <div className="text-[11px] text-slate-500">
               Supermajority ({quorum.superFractionLabel})
             </div>
-            <div className="font-mono-tabular text-sm font-bold text-slate-900 mt-0.5">
+            <div className="font-mono-tabular text-base font-bold text-slate-900 mt-0.5">
               {quorum.twoThirdsMajority} votes
             </div>
           </div>
@@ -282,7 +282,7 @@ export function RollCallTab({
               return (
                 <div
                   key={delegate.id}
-                  className="px-4 py-2.5 flex flex-wrap sm:flex-nowrap items-center justify-between gap-3 hover:bg-slate-50/70 transition-colors"
+                  className="px-4 py-2 flex flex-wrap sm:flex-nowrap items-center justify-between gap-3 hover:bg-slate-50/70 transition-colors"
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <CountryFlag
@@ -299,7 +299,7 @@ export function RollCallTab({
                     <button
                       type="button"
                       onClick={() => handleSetSingle(delegate.id, 'absent')}
-                      className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer whitespace-nowrap ${
+                      className={`min-h-10 px-3.5 py-2 text-sm font-semibold rounded-lg transition-colors cursor-pointer whitespace-nowrap ${
                         status === 'absent'
                           ? 'bg-red-600 text-white'
                           : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -310,7 +310,7 @@ export function RollCallTab({
                     <button
                       type="button"
                       onClick={() => handleSetSingle(delegate.id, 'present')}
-                      className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer whitespace-nowrap ${
+                      className={`min-h-10 px-3.5 py-2 text-sm font-semibold rounded-lg transition-colors cursor-pointer whitespace-nowrap ${
                         status === 'present'
                           ? 'bg-sky-600 text-white'
                           : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -321,7 +321,7 @@ export function RollCallTab({
                     <button
                       type="button"
                       onClick={() => handleSetSingle(delegate.id, 'pv')}
-                      className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer whitespace-nowrap ${
+                      className={`min-h-10 px-3.5 py-2 text-sm font-semibold rounded-lg transition-colors cursor-pointer whitespace-nowrap ${
                         status === 'pv'
                           ? 'bg-green-600 text-white'
                           : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
