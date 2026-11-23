@@ -5,8 +5,7 @@ import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import {
   auth,
   db,
-  handleFirestoreError,
-  OperationType,
+  formatFirestoreErrorMessage,
   signInWithGoogle,
   signOutChair,
   testConnection,
@@ -59,6 +58,7 @@ function ChairOSApp() {
 
   const [committees, setCommittees] = useState<Committee[]>([]);
   const [loadingCommittees, setLoadingCommittees] = useState(false);
+  const [cloudError, setCloudError] = useState<string | null>(null);
   const [activeCommitteeId, setActiveCommitteeId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -66,6 +66,7 @@ function ChairOSApp() {
     const unsub = onAuthStateChanged(auth, async (nextUser) => {
       setUser(nextUser);
       setAuthReady(true);
+      setCloudError(null);
       if (nextUser) {
         setIsGuest(false);
         try {
@@ -73,6 +74,7 @@ function ChairOSApp() {
           await syncUserProfile(nextUser);
         } catch (err) {
           console.error('Failed to sync user profile:', err);
+          setCloudError(formatFirestoreErrorMessage(err));
         }
       } else if (!localStorage.getItem(GUEST_SESSION_KEY)) {
         setCommittees([]);
@@ -125,11 +127,14 @@ function ChairOSApp() {
           ownedMap.set(d.id, { id: d.id, ...(d.data() as Omit<Committee, 'id'>) });
         });
         ownedReady = true;
+        setCloudError(null);
         emitMerged();
       },
       (err) => {
+        console.error('Owned committees listener error:', err);
+        ownedReady = true;
         setLoadingCommittees(false);
-        handleFirestoreError(err, OperationType.LIST, 'committees');
+        setCloudError(formatFirestoreErrorMessage(err));
       }
     );
 
@@ -144,8 +149,10 @@ function ChairOSApp() {
         emitMerged();
       },
       (err) => {
+        console.error('Shared committees listener error:', err);
+        memberReady = true;
         setLoadingCommittees(false);
-        handleFirestoreError(err, OperationType.LIST, 'committees');
+        setCloudError(formatFirestoreErrorMessage(err));
       }
     );
 
@@ -278,6 +285,8 @@ function ChairOSApp() {
       }}
       onSignOut={handleSignOutOrExitGuest}
       onSwitchToGoogle={handleSignIn}
+      cloudError={cloudError}
+      onDismissCloudError={() => setCloudError(null)}
     />
   );
 }

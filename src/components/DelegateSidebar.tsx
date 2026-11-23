@@ -33,6 +33,7 @@ export function DelegateSidebar({
   const [addingOpen, setAddingOpen] = useState(false);
   const [addInput, setAddInput] = useState('');
   const [addingBusy, setAddingBusy] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
 
   const speechValues = useMemo(() => delegates.map((d) => d.speechesCount), [delegates]);
   const poiValues = useMemo(() => delegates.map((d) => d.poisCount), [delegates]);
@@ -87,15 +88,21 @@ export function DelegateSidebar({
     const finalName = matched
       ? matched.name
       : raw.slice(0, BLUEPRINT_BOUNDS.DELEGATE_NAME_MAX);
+    const fallbackLetters = (codeInput || raw.replace(/[^a-zA-Z0-9]/g, '')).slice(0, 3).toUpperCase();
     const finalCode = matched
       ? matched.code
-      : (codeInput || raw.replace(/[^a-zA-Z]/g, '').slice(0, 3) || 'DEL').toUpperCase();
+      : fallbackLetters.length >= 2
+        ? fallbackLetters
+        : 'DEL';
 
     setAddingBusy(true);
+    setAddError(null);
     try {
       await onAddDelegate(finalName, finalCode);
       setAddInput('');
       setAddingOpen(false);
+    } catch (err) {
+      setAddError(err instanceof Error ? err.message : 'Unable to add delegate.');
     } finally {
       setAddingBusy(false);
     }
@@ -130,7 +137,10 @@ export function DelegateSidebar({
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => setAddingOpen((prev) => !prev)}
+              onClick={() => {
+                setAddError(null);
+                setAddingOpen((prev) => !prev);
+              }}
               aria-label="Add delegate"
               title="Add delegate"
               className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold text-[#0047AB] bg-blue-50 hover:bg-blue-100 rounded-md transition-colors cursor-pointer"
@@ -156,7 +166,10 @@ export function DelegateSidebar({
                 type="text"
                 maxLength={BLUEPRINT_BOUNDS.DELEGATE_NAME_MAX}
                 value={addInput}
-                onChange={(e) => setAddInput(e.target.value)}
+                onChange={(e) => {
+                  setAddInput(e.target.value);
+                  setAddError(null);
+                }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     e.preventDefault();
@@ -179,6 +192,11 @@ export function DelegateSidebar({
                 {addingBusy ? '...' : 'Add'}
               </button>
             </div>
+            {addError && (
+              <p role="alert" className="text-[11px] font-medium text-red-600 leading-snug">
+                {addError}
+              </p>
+            )}
             {addInput.trim().length > 0 && addSuggestions.length > 0 && (
               <div className="max-h-32 overflow-y-auto bg-white border border-slate-200 rounded-md divide-y divide-slate-100">
                 {addSuggestions.map((c) => (

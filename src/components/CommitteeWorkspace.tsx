@@ -17,7 +17,7 @@ import {
   Users,
   X,
 } from 'lucide-react';
-import { db, handleFirestoreError, OperationType } from '../lib/firebase';
+import { db, formatFirestoreErrorMessage } from '../lib/firebase';
 import {
   addDelegateToCommittee,
   createMotion,
@@ -67,7 +67,7 @@ import {
   guestUpdateQuorumRatio,
   subscribeGuestStore,
 } from '../lib/guestStore';
-import { computeQuorumMetrics } from '../lib/munRules';
+import { computeQuorumMetrics, dedupeSpeakerQueue } from '../lib/munRules';
 import { exportCommitteeCsv, exportCommitteePdf } from '../lib/exports';
 import type {
   ActivityLog,
@@ -135,12 +135,14 @@ export function CommitteeWorkspace({
   const [projectorPreparing, setProjectorPreparing] = useState(false);
   const [coChairPopoverOpen, setCoChairPopoverOpen] = useState(false);
   const [joinCodeCopied, setJoinCodeCopied] = useState(false);
+  const [joinPasswordCopied, setJoinPasswordCopied] = useState(false);
   const [newJoinPassword, setNewJoinPassword] = useState('');
   const [showNewJoinPassword, setShowNewJoinPassword] = useState(false);
   const [regenerateOnSave, setRegenerateOnSave] = useState(false);
   const [savingJoinAccess, setSavingJoinAccess] = useState(false);
   const [joinAccessMsg, setJoinAccessMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const [workspaceError, setWorkspaceError] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const projectorPopoverRef = useRef<HTMLDivElement | null>(null);
   const coChairPopoverRef = useRef<HTMLDivElement | null>(null);
@@ -169,18 +171,23 @@ export function CommitteeWorkspace({
 
     if (!user) return;
     setLoading(true);
-    const comPath = `committees/${committeeId}`;
+    setWorkspaceError(null);
     const unsubCommittee = onSnapshot(
       doc(db, 'committees', committeeId),
       (snap) => {
         if (snap.exists()) {
           setCommittee({ id: snap.id, ...(snap.data() as Omit<Committee, 'id'>) });
+          setWorkspaceError(null);
         } else {
           setCommittee(null);
         }
         setLoading(false);
       },
-      (err) => handleFirestoreError(err, OperationType.GET, comPath)
+      (err) => {
+        console.error('Committee listener error:', err);
+        setWorkspaceError(formatFirestoreErrorMessage(err));
+        setLoading(false);
+      }
     );
 
     return () => {
@@ -214,7 +221,10 @@ export function CommitteeWorkspace({
             snap.docs.map((d) => ({ id: d.id, ...(d.data() as Record<string, unknown>) }) as T)
           );
         },
-        (err) => handleFirestoreError(err, OperationType.LIST, path)
+        (err) => {
+          console.error(`Subcollection listener error (${path}):`, err);
+          setWorkspaceError(formatFirestoreErrorMessage(err));
+        }
       );
     };
 
@@ -389,7 +399,10 @@ export function CommitteeWorkspace({
     const currentSpeaker = activeCaucus?.currentSpeakerId
       ? delegateMap.get(activeCaucus.currentSpeakerId)
       : undefined;
-    const upcomingQueue = (activeCaucus?.queue || [])
+    const upcomingQueue = dedupeSpeakerQueue(
+      activeCaucus?.queue || [],
+      activeCaucus?.currentSpeakerId
+    )
       .slice(0, 4)
       .map((id) => delegateMap.get(id))
       .filter((d): d is Delegate => Boolean(d))
@@ -443,8 +456,10 @@ export function CommitteeWorkspace({
 
   if (!committee) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 gap-4">
-        <p className="text-sm text-slate-700">Committee not found or access denied.</p>
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 gap-4 text-center max-w-md mx-auto">
+        <p className="text-sm text-slate-700">
+          {workspaceError || 'Committee not found or access denied.'}
+        </p>
         <button
           type="button"
           onClick={onBackToDashboard}
@@ -463,9 +478,29 @@ export function CommitteeWorkspace({
   const isCommitteeOwner = !isGuest && user?.uid === committee.ownerId;
   const coChairCount = members.length > 0 ? members.length : committee.memberIds?.length || 1;
 
+  const runCloudThrowing = async <T,>(fn: () => Promise<T>): Promise<T> => {
+    setWorkspaceError(null);
+    try {
+      return await fn();
+    } catch (err) {
+      const msg = formatFirestoreErrorMessage(err);
+      setWorkspaceError(msg);
+      throw new Error(msg);
+    }
+  };
+
+  const runCloudSafe = async (fn: () => Promise<unknown>): Promise<void> => {
+    setWorkspaceError(null);
+    try {
+      await fn();
+    } catch (err) {
+      setWorkspaceError(formatFirestoreErrorMessage(err));
+    }
+  };
+
   const handleTabChange = async (tab: ProceduralTab) => {
     if (isGuest) guestUpdateCommitteeTab(committee.id, tab);
-    else await updateCommitteeTab(committee.id, tab);
+    else await runCloudSafe(() => updateCommitteeTab(committee.id, tab));
   };
 
   return (
@@ -559,43 +594,105 @@ export function CommitteeWorkspace({
                   </div>
 
                   {committee.joinCode ? (
-                    <div className="flex items-center justify-between gap-3 bg-slate-50 border border-slate-200 rounded-lg px-3.5 py-2.5">
-                      <div>
-                        <div className="text-[11px] font-medium text-slate-500">
-                          4-Character Join Code
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-3 bg-slate-50 border border-slate-200 rounded-lg px-3.5 py-2.5">
+                        <div>
+                          <div className="text-[11px] font-medium text-slate-500">
+                            4-Character Join Code
+                          </div>
+                          <div className="font-mono-tabular text-xl font-bold tracking-[0.22em] text-[#0047AB]">
+                            {committee.joinCode}
+                          </div>
                         </div>
-                        <div className="font-mono-tabular text-xl font-bold tracking-[0.22em] text-[#0047AB]">
-                          {committee.joinCode}
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          if (!committee.joinCode) return;
-                          if (navigator.clipboard?.writeText) {
-                            try {
-                              await navigator.clipboard.writeText(committee.joinCode);
-                              setJoinCodeCopied(true);
-                              window.setTimeout(() => setJoinCodeCopied(false), 1800);
-                            } catch {
-                              setJoinCodeCopied(false);
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (!committee.joinCode) return;
+                            if (navigator.clipboard?.writeText) {
+                              try {
+                                await navigator.clipboard.writeText(committee.joinCode);
+                                setJoinCodeCopied(true);
+                                window.setTimeout(() => setJoinCodeCopied(false), 1800);
+                              } catch {
+                                setJoinCodeCopied(false);
+                              }
                             }
-                          }
-                        }}
-                        className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-100 rounded-lg cursor-pointer"
-                      >
-                        {joinCodeCopied ? (
-                          <>
-                            <Check className="w-3.5 h-3.5 text-green-600" />
-                            Copied
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="w-3.5 h-3.5" />
-                            Copy Code
-                          </>
-                        )}
-                      </button>
+                          }}
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-100 rounded-lg cursor-pointer"
+                        >
+                          {joinCodeCopied ? (
+                            <>
+                              <Check className="w-3.5 h-3.5 text-green-600" />
+                              Copied
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3.5 h-3.5" />
+                              Copy Code
+                            </>
+                          )}
+                        </button>
+                      </div>
+
+                      {!isGuest && (
+                        <div className="flex items-center justify-between gap-3 bg-slate-50 border border-slate-200 rounded-lg px-3.5 py-2.5">
+                          <div className="min-w-0 flex-1 group">
+                            <div className="text-[11px] font-medium text-slate-500 flex items-center gap-1.5">
+                              <span>Join Password</span>
+                              {committee.joinPassword && (
+                                <span className="text-[10px] text-slate-400">
+                                  (hover to reveal)
+                                </span>
+                              )}
+                            </div>
+                            {committee.joinPassword ? (
+                              <div
+                                tabIndex={0}
+                                title="Hover to reveal password"
+                                className="mt-0.5 font-mono-tabular text-sm font-semibold text-slate-900 truncate blur-[5px] hover:blur-none group-hover:blur-none focus:blur-none transition-[filter] duration-150 select-none hover:select-all group-hover:select-all cursor-default"
+                              >
+                                {committee.joinPassword}
+                              </div>
+                            ) : (
+                              <div className="mt-0.5 text-[11px] text-slate-500">
+                                {isCommitteeOwner
+                                  ? 'Re-save a password below to enable quick copy.'
+                                  : 'Password not saved for quick copy.'}
+                              </div>
+                            )}
+                          </div>
+                          {committee.joinPassword && (
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (!committee.joinPassword) return;
+                                if (navigator.clipboard?.writeText) {
+                                  try {
+                                    await navigator.clipboard.writeText(committee.joinPassword);
+                                    setJoinPasswordCopied(true);
+                                    window.setTimeout(() => setJoinPasswordCopied(false), 1800);
+                                  } catch {
+                                    setJoinPasswordCopied(false);
+                                  }
+                                }
+                              }}
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-100 rounded-lg shrink-0 cursor-pointer"
+                            >
+                              {joinPasswordCopied ? (
+                                <>
+                                  <Check className="w-3.5 h-3.5 text-green-600" />
+                                  Copied
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="w-3.5 h-3.5" />
+                                  Copy Password
+                                </>
+                              )}
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg p-3">
@@ -788,6 +885,8 @@ export function CommitteeWorkspace({
                     }
                     setProjectorCopied(copied);
                     setProjectorPopoverOpen(true);
+                  } catch (err) {
+                    setWorkspaceError(formatFirestoreErrorMessage(err));
                   } finally {
                     setProjectorPreparing(false);
                   }
@@ -936,16 +1035,18 @@ export function CommitteeWorkspace({
             if (isGuest) {
               guestAddDelegate(committee.id, countryName, countryCode, activeSession?.id);
             } else {
-              await addDelegateToCommittee({
-                committeeId: committee.id,
-                ownerId,
-                memberIds,
-                countryName,
-                countryCode,
-                activeSessionId: activeSession?.id,
-                currentAttendance: attendanceMap,
-                nextDelegateCount: delegates.length + 1,
-              });
+              await runCloudThrowing(() =>
+                addDelegateToCommittee({
+                  committeeId: committee.id,
+                  ownerId,
+                  memberIds,
+                  countryName,
+                  countryCode,
+                  activeSessionId: activeSession?.id,
+                  currentAttendance: attendanceMap,
+                  nextDelegateCount: delegates.length + 1,
+                })
+              );
             }
           }}
         />
@@ -972,6 +1073,23 @@ export function CommitteeWorkspace({
             })}
           </div>
 
+          {workspaceError && !isGuest && (
+            <div
+              role="alert"
+              className="mx-4 sm:mx-5 mt-3 p-2.5 rounded-lg bg-red-50 border border-red-200 text-xs text-red-700 flex items-center justify-between gap-3 shrink-0"
+            >
+              <span>{workspaceError}</span>
+              <button
+                type="button"
+                onClick={() => setWorkspaceError(null)}
+                aria-label="Dismiss error"
+                className="p-1 text-red-500 hover:text-red-800 rounded cursor-pointer shrink-0"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
           {/* Active Tab Stage (Viewport-Locked, Internal Module Scrolling) */}
           <div className="flex-1 min-h-0 p-4 sm:p-5 overflow-hidden flex flex-col">
             {activeTab === 'roll_call' && (
@@ -984,7 +1102,7 @@ export function CommitteeWorkspace({
                 supermajorityFraction={committee.supermajorityFraction || '2/3'}
                 onSelectSession={async (sessionId) => {
                   if (isGuest) guestUpdateActiveSession(committee.id, sessionId);
-                  else await updateActiveSession(committee.id, sessionId);
+                  else await runCloudSafe(() => updateActiveSession(committee.id, sessionId));
                 }}
                 onCreateSession={async () => {
                   if (isGuest) {
@@ -994,28 +1112,49 @@ export function CommitteeWorkspace({
                       delegates.map((d) => d.id)
                     );
                   } else {
-                    await createNewSession(
-                      committee.id,
-                      ownerId,
-                      sortedSessions.length + 1,
-                      delegates.map((d) => d.id),
-                      memberIds
+                    await runCloudSafe(() =>
+                      createNewSession(
+                        committee.id,
+                        ownerId,
+                        sortedSessions.length + 1,
+                        delegates.map((d) => d.id),
+                        memberIds
+                      )
                     );
                   }
                 }}
                 onUpdateAttendance={async (newMap) => {
-                  if (!activeSession) return;
+                  if (!activeSession) {
+                    setWorkspaceError(
+                      'Session data has not loaded yet. Wait a moment or check Cloud Firestore permissions.'
+                    );
+                    return;
+                  }
                   if (isGuest) guestUpdateAttendance(committee.id, activeSession.id, newMap);
-                  else await updateSessionAttendance(committee.id, activeSession.id, newMap);
+                  else
+                    await runCloudSafe(() =>
+                      updateSessionAttendance(committee.id, activeSession.id, newMap)
+                    );
                 }}
                 onChangeQuorumRatio={async (ratio) => {
-                  if (!activeSession) return;
+                  if (!activeSession) {
+                    setWorkspaceError(
+                      'Session data has not loaded yet. Wait a moment or check Cloud Firestore permissions.'
+                    );
+                    return;
+                  }
                   if (isGuest) guestUpdateQuorumRatio(committee.id, activeSession.id, ratio);
-                  else await updateSessionQuorumRatio(committee.id, activeSession.id, ratio);
+                  else
+                    await runCloudSafe(() =>
+                      updateSessionQuorumRatio(committee.id, activeSession.id, ratio)
+                    );
                 }}
                 onUpdateMajorities={async (simpleFraction, superFraction) => {
                   if (isGuest) guestUpdateMajorities(committee.id, simpleFraction, superFraction);
-                  else await updateCommitteeMajorities(committee.id, simpleFraction, superFraction);
+                  else
+                    await runCloudSafe(() =>
+                      updateCommitteeMajorities(committee.id, simpleFraction, superFraction)
+                    );
                 }}
               />
             )}
@@ -1028,7 +1167,10 @@ export function CommitteeWorkspace({
                 attendance={attendanceMap}
                 onUpdateCaucus={async (patch) => {
                   if (isGuest) guestUpdateCaucusState(committee.id, 'opening', patch);
-                  else await updateCaucusState(committee.id, ownerId, 'opening', patch, memberIds);
+                  else
+                    await runCloudSafe(() =>
+                      updateCaucusState(committee.id, ownerId, 'opening', patch, memberIds)
+                    );
                 }}
                 onCompleteSpeaker={async (params) => {
                   const defaultSpk = caucusMap.opening?.speakerSeconds || 60;
@@ -1052,7 +1194,7 @@ export function CommitteeWorkspace({
                     },
                   };
                   if (isGuest) guestLogSpeechAndAdvance(payload);
-                  else await logSpeechAndAdvance({ ...payload, ownerId, memberIds });
+                  else await runCloudSafe(() => logSpeechAndAdvance({ ...payload, ownerId, memberIds }));
                 }}
               />
             )}
@@ -1071,13 +1213,15 @@ export function CommitteeWorkspace({
                       ...params,
                     });
                   } else {
-                    await createMotion({
-                      committeeId: committee.id,
-                      ownerId,
-                      memberIds,
-                      sessionId: activeSession?.id || 'default',
-                      ...params,
-                    });
+                    await runCloudThrowing(() =>
+                      createMotion({
+                        committeeId: committee.id,
+                        ownerId,
+                        memberIds,
+                        sessionId: activeSession?.id || 'default',
+                        ...params,
+                      })
+                    );
                   }
                 }}
                 onResolveMotion={async (motion, outcome) => {
@@ -1089,19 +1233,21 @@ export function CommitteeWorkspace({
                       launchCaucus: outcome === 'accepted',
                     });
                   } else {
-                    await resolveMotion({
-                      committeeId: committee.id,
-                      ownerId,
-                      memberIds,
-                      motion,
-                      outcome,
-                      launchCaucus: outcome === 'accepted',
-                    });
+                    await runCloudSafe(() =>
+                      resolveMotion({
+                        committeeId: committee.id,
+                        ownerId,
+                        memberIds,
+                        motion,
+                        outcome,
+                        launchCaucus: outcome === 'accepted',
+                      })
+                    );
                   }
                 }}
                 onDeleteMotion={async (motionId) => {
                   if (isGuest) guestDeleteMotion(committee.id, motionId);
-                  else await deleteMotion(committee.id, motionId);
+                  else await runCloudSafe(() => deleteMotion(committee.id, motionId));
                 }}
               />
             )}
@@ -1114,7 +1260,10 @@ export function CommitteeWorkspace({
                 attendance={attendanceMap}
                 onUpdateCaucus={async (patch) => {
                   if (isGuest) guestUpdateCaucusState(committee.id, 'gsl', patch);
-                  else await updateCaucusState(committee.id, ownerId, 'gsl', patch, memberIds);
+                  else
+                    await runCloudSafe(() =>
+                      updateCaucusState(committee.id, ownerId, 'gsl', patch, memberIds)
+                    );
                 }}
                 onCompleteSpeaker={async (params) => {
                   const defaultSpk = caucusMap.gsl?.speakerSeconds || 90;
@@ -1140,7 +1289,7 @@ export function CommitteeWorkspace({
                     },
                   };
                   if (isGuest) guestLogSpeechAndAdvance(payload);
-                  else await logSpeechAndAdvance({ ...payload, ownerId, memberIds });
+                  else await runCloudSafe(() => logSpeechAndAdvance({ ...payload, ownerId, memberIds }));
                 }}
                 onLogPoi={async (questioner, targetName, note) => {
                   const payload = {
@@ -1154,7 +1303,7 @@ export function CommitteeWorkspace({
                     note,
                   };
                   if (isGuest) guestLogDelegatePoi(payload);
-                  else await logDelegatePoi({ ...payload, ownerId, memberIds });
+                  else await runCloudSafe(() => logDelegatePoi({ ...payload, ownerId, memberIds }));
                 }}
               />
             )}
@@ -1168,7 +1317,10 @@ export function CommitteeWorkspace({
                 attendance={attendanceMap}
                 onUpdateCaucus={async (patch) => {
                   if (isGuest) guestUpdateCaucusState(committee.id, 'mod', patch);
-                  else await updateCaucusState(committee.id, ownerId, 'mod', patch, memberIds);
+                  else
+                    await runCloudSafe(() =>
+                      updateCaucusState(committee.id, ownerId, 'mod', patch, memberIds)
+                    );
                 }}
                 onCompleteSpeaker={async (params) => {
                   const spkLimit = caucusMap.mod?.speakerSeconds || 60;
@@ -1193,7 +1345,7 @@ export function CommitteeWorkspace({
                     },
                   };
                   if (isGuest) guestLogSpeechAndAdvance(payload);
-                  else await logSpeechAndAdvance({ ...payload, ownerId, memberIds });
+                  else await runCloudSafe(() => logSpeechAndAdvance({ ...payload, ownerId, memberIds }));
                 }}
                 onLogPoi={async (questioner, targetName, topic, note) => {
                   const payload = {
@@ -1207,7 +1359,7 @@ export function CommitteeWorkspace({
                     note,
                   };
                   if (isGuest) guestLogDelegatePoi(payload);
-                  else await logDelegatePoi({ ...payload, ownerId, memberIds });
+                  else await runCloudSafe(() => logDelegatePoi({ ...payload, ownerId, memberIds }));
                 }}
               />
             )}
@@ -1219,7 +1371,10 @@ export function CommitteeWorkspace({
                 blocs={sortedBlocs}
                 onUpdateCaucus={async (patch) => {
                   if (isGuest) guestUpdateCaucusState(committee.id, 'unmod', patch);
-                  else await updateCaucusState(committee.id, ownerId, 'unmod', patch, memberIds);
+                  else
+                    await runCloudSafe(() =>
+                      updateCaucusState(committee.id, ownerId, 'unmod', patch, memberIds)
+                    );
                 }}
                 onCreateBloc={async (fields) => {
                   if (isGuest) {
@@ -1229,18 +1384,20 @@ export function CommitteeWorkspace({
                       ...fields,
                     });
                   } else {
-                    await createUnmodBloc({
-                      committeeId: committee.id,
-                      ownerId,
-                      memberIds,
-                      sessionId: activeSession?.id || 'default',
-                      ...fields,
-                    });
+                    await runCloudSafe(() =>
+                      createUnmodBloc({
+                        committeeId: committee.id,
+                        ownerId,
+                        memberIds,
+                        sessionId: activeSession?.id || 'default',
+                        ...fields,
+                      })
+                    );
                   }
                 }}
                 onDeleteBloc={async (blocId) => {
                   if (isGuest) guestDeleteUnmodBloc(committee.id, blocId);
-                  else await deleteUnmodBloc(committee.id, blocId);
+                  else await runCloudSafe(() => deleteUnmodBloc(committee.id, blocId));
                 }}
               />
             )}
@@ -1254,7 +1411,10 @@ export function CommitteeWorkspace({
                 logs={sortedLogs}
                 onUpdateCaucus={async (patch) => {
                   if (isGuest) guestUpdateCaucusState(committee.id, 'cow', patch);
-                  else await updateCaucusState(committee.id, ownerId, 'cow', patch, memberIds);
+                  else
+                    await runCloudSafe(() =>
+                      updateCaucusState(committee.id, ownerId, 'cow', patch, memberIds)
+                    );
                 }}
                 onPassFloor={async (params) => {
                   if (params.previousSpeakerId) {
@@ -1275,21 +1435,23 @@ export function CommitteeWorkspace({
                       },
                     };
                     if (isGuest) guestLogSpeechAndAdvance(payload);
-                    else await logSpeechAndAdvance({ ...payload, ownerId, memberIds });
+                    else await runCloudSafe(() => logSpeechAndAdvance({ ...payload, ownerId, memberIds }));
                   } else {
                     if (isGuest) {
                       guestUpdateCaucusState(committee.id, 'cow', {
                         currentSpeakerId: params.nextSpeakerId,
                       });
                     } else {
-                      await updateCaucusState(
-                        committee.id,
-                        ownerId,
-                        'cow',
-                        {
-                          currentSpeakerId: params.nextSpeakerId,
-                        },
-                        memberIds
+                      await runCloudSafe(() =>
+                        updateCaucusState(
+                          committee.id,
+                          ownerId,
+                          'cow',
+                          {
+                            currentSpeakerId: params.nextSpeakerId,
+                          },
+                          memberIds
+                        )
                       );
                     }
                   }
@@ -1307,7 +1469,10 @@ export function CommitteeWorkspace({
                 logs={sortedLogs}
                 onUpdateCaucus={async (patch) => {
                   if (isGuest) guestUpdateCaucusState(committee.id, 'resolutions', patch);
-                  else await updateCaucusState(committee.id, ownerId, 'resolutions', patch, memberIds);
+                  else
+                    await runCloudSafe(() =>
+                      updateCaucusState(committee.id, ownerId, 'resolutions', patch, memberIds)
+                    );
                 }}
                 onCompleteSpeech={async (params) => {
                   const defaultSpk = caucusMap.resolutions?.speakerSeconds || 90;
@@ -1334,7 +1499,7 @@ export function CommitteeWorkspace({
                     },
                   };
                   if (isGuest) guestLogSpeechAndAdvance(payload);
-                  else await logSpeechAndAdvance({ ...payload, ownerId, memberIds });
+                  else await runCloudSafe(() => logSpeechAndAdvance({ ...payload, ownerId, memberIds }));
                 }}
                 onLogPoi={async (questioner, targetName, topic, note) => {
                   const payload = {
@@ -1348,7 +1513,7 @@ export function CommitteeWorkspace({
                     note,
                   };
                   if (isGuest) guestLogDelegatePoi(payload);
-                  else await logDelegatePoi({ ...payload, ownerId, memberIds });
+                  else await runCloudSafe(() => logDelegatePoi({ ...payload, ownerId, memberIds }));
                 }}
                 onLogAmendment={async (params) => {
                   const payload = {
@@ -1357,7 +1522,7 @@ export function CommitteeWorkspace({
                     ...params,
                   };
                   if (isGuest) guestLogAmendmentOutcome(payload);
-                  else await logAmendmentOutcome({ ...payload, ownerId, memberIds });
+                  else await runCloudSafe(() => logAmendmentOutcome({ ...payload, ownerId, memberIds }));
                 }}
               />
             )}
@@ -1375,21 +1540,21 @@ export function CommitteeWorkspace({
         onClose={() => setSelectedDelegateId(null)}
         onSaveNotes={async (delId, notes) => {
           if (isGuest) guestUpdateDelegateChairNotes(committee.id, delId, notes);
-          else await updateDelegateChairNotes(committee.id, delId, notes);
+          else await runCloudSafe(() => updateDelegateChairNotes(committee.id, delId, notes));
         }}
         onSaveStats={async (delId, stats) => {
           if (isGuest) guestUpdateDelegateStats(committee.id, delId, stats);
-          else await updateDelegateStats(committee.id, delId, stats);
+          else await runCloudSafe(() => updateDelegateStats(committee.id, delId, stats));
         }}
         onChangeAttendance={async (delId, status) => {
           if (!activeSession) return;
           const next = { ...attendanceMap, [delId]: status };
           if (isGuest) guestUpdateAttendance(committee.id, activeSession.id, next);
-          else await updateSessionAttendance(committee.id, activeSession.id, next);
+          else await runCloudSafe(() => updateSessionAttendance(committee.id, activeSession.id, next));
         }}
         onUpdateLogNote={async (logId, note) => {
           if (isGuest) guestUpdateActivityLogNote(committee.id, logId, note);
-          else await updateActivityLogNote(committee.id, logId, note);
+          else await runCloudSafe(() => updateActivityLogNote(committee.id, logId, note));
         }}
         onDeleteLog={async (log) => {
           if (isGuest) {
@@ -1401,12 +1566,14 @@ export function CommitteeWorkspace({
               log.outcome
             );
           } else {
-            await deleteActivityLogEntry(
-              committee.id,
-              log.id,
-              log.delegateId,
-              log.type,
-              log.outcome
+            await runCloudSafe(() =>
+              deleteActivityLogEntry(
+                committee.id,
+                log.id,
+                log.delegateId,
+                log.type,
+                log.outcome
+              )
             );
           }
         }}

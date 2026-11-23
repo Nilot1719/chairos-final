@@ -24,6 +24,7 @@ import {
   makeJoinCode,
   normalizeJoinCode,
 } from '../lib/munRules';
+import { formatFirestoreErrorMessage } from '../lib/firebase';
 
 interface DashboardViewProps {
   user: User | null;
@@ -44,6 +45,8 @@ interface DashboardViewProps {
   onLeaveCommittee: (committeeId: string) => Promise<void>;
   onSignOut: () => void;
   onSwitchToGoogle?: () => void;
+  cloudError?: string | null;
+  onDismissCloudError?: () => void;
 }
 
 export function DashboardView({
@@ -58,6 +61,8 @@ export function DashboardView({
   onLeaveCommittee,
   onSignOut,
   onSwitchToGoogle,
+  cloudError,
+  onDismissCloudError,
 }: DashboardViewProps) {
   const firstName = isGuest
     ? 'Chair'
@@ -112,11 +117,12 @@ export function DashboardView({
         c.code.toLowerCase() === rawName.toLowerCase()
     );
 
+    const fallbackCode = (codeInput || rawName.replace(/[^a-zA-Z0-9]/g, '')).slice(0, 3).toUpperCase();
     const nextCountry = matched
       ? { name: matched.name, code: matched.code }
       : {
           name: rawName.slice(0, BLUEPRINT_BOUNDS.DELEGATE_NAME_MAX),
-          code: (codeInput || rawName.replace(/[^a-zA-Z]/g, '').slice(0, 3) || 'DEL').toUpperCase(),
+          code: fallbackCode.length >= 2 ? fallbackCode : 'DEL',
         };
 
     setSelectedCountries((prev) => [...prev, nextCountry]);
@@ -181,7 +187,7 @@ export function DashboardView({
       setSelectedCountries([]);
       setCountryQuery('');
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'Unable to create committee.');
+      setFormError(formatFirestoreErrorMessage(err));
     } finally {
       setCreating(false);
     }
@@ -206,7 +212,7 @@ export function DashboardView({
       setJoinCodeInput('');
       setJoinPasswordInput('');
     } catch (err) {
-      setJoinError(err instanceof Error ? err.message : 'Unable to join committee.');
+      setJoinError(formatFirestoreErrorMessage(err));
     } finally {
       setJoining(false);
     }
@@ -221,6 +227,8 @@ export function DashboardView({
         await onLeaveCommittee(com.id);
       }
       setConfirmActionId(null);
+    } catch (err) {
+      setJoinError(formatFirestoreErrorMessage(err));
     } finally {
       setActingId(null);
     }
@@ -273,6 +281,25 @@ export function DashboardView({
             Open an active committee, join a co-chair with a 4-character code, or build a new roster.
           </p>
         </div>
+
+        {cloudError && !isGuest && (
+          <div
+            role="alert"
+            className="mb-4 p-3 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700 flex items-center justify-between gap-3 shrink-0"
+          >
+            <span>{cloudError}</span>
+            {onDismissCloudError && (
+              <button
+                type="button"
+                onClick={onDismissCloudError}
+                aria-label="Dismiss cloud error"
+                className="p-1 text-red-500 hover:text-red-800 rounded cursor-pointer shrink-0"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        )}
 
         <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-12 gap-8 overflow-y-auto lg:overflow-hidden">
           {/* Left Column: Join Committee + Your Committees */}

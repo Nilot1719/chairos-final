@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { getGuestBundle, subscribeGuestStore } from '../lib/guestStore';
-import { computeQuorumMetrics, formatClock } from '../lib/munRules';
+import { computeQuorumMetrics, dedupeSpeakerQueue, formatClock } from '../lib/munRules';
 import type {
   CaucusState,
   Delegate,
@@ -60,7 +60,10 @@ function buildSnapshotFromGuest(committeeId: string): ProjectorSnapshot | null {
     ? delegateMap.get(activeCaucus.currentSpeakerId)
     : undefined;
 
-  const upcomingQueue = (activeCaucus?.queue || [])
+  const upcomingQueue = dedupeSpeakerQueue(
+    activeCaucus?.queue || [],
+    activeCaucus?.currentSpeakerId
+  )
     .slice(0, 4)
     .map((id) => delegateMap.get(id))
     .filter((d): d is Delegate => Boolean(d))

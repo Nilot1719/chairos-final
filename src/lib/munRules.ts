@@ -32,6 +32,7 @@ export const BLUEPRINT_BOUNDS = {
   BLOC_SPONSORS_MAX: 400,
   BLOC_NOTES_MAX: 2000,
   FRACTION_MAX: 20,
+  JOIN_PASSWORD_MAX: 120,
 } as const;
 
 export const MOTION_LABELS: Record<MotionActionType, string> = {
@@ -214,8 +215,8 @@ export function computeDelegateTotalScore(d: Delegate): number {
 }
 
 /**
- * Returns an accessible background color ranging from dark red (#7F1D1D)
- * through muted amber (#92400E) to bright green (#16A34A) based on relative rank.
+ * Returns an accessible background color scaled directly by stat value from
+ * dark red (#7F1D1D, bottom stat) through red/amber/lime to bright green (#16A34A, top stat).
  */
 export function getRankHeatColors(
   value: number,
@@ -230,28 +231,34 @@ export function getRankHeatColors(
 
   let t = 0;
   if (max === min) {
-    t = max === 0 ? 0 : 1;
+    t = max <= 0 ? 0 : 1;
   } else {
-    const below = allValues.filter((v) => v < value).length;
-    const equal = allValues.filter((v) => v === value).length;
-    const percentile = (below + 0.5 * (equal - 1)) / Math.max(1, allValues.length - 1);
-    t = Math.max(0, Math.min(1, percentile));
+    t = Math.max(0, Math.min(1, (value - min) / (max - min)));
   }
 
-  // Dark Red (127, 29, 29) -> Warm Amber-Brown (146, 84, 14) -> Bright Green (22, 163, 74)
-  let r: number;
-  let g: number;
-  let b: number;
-  if (t < 0.5) {
-    const local = t * 2;
-    r = Math.round(127 + (154 - 127) * local);
-    g = Math.round(29 + (92 - 29) * local);
-    b = Math.round(29 + (16 - 29) * local);
-  } else {
-    const local = (t - 0.5) * 2;
-    r = Math.round(154 + (22 - 154) * local);
-    g = Math.round(92 + (163 - 92) * local);
-    b = Math.round(16 + (74 - 16) * local);
+  // Smooth multi-stop scale:
+  // 0.00 Dark Red (#7F1D1D) -> 0.25 Red (#DC2626) -> 0.50 Amber (#D97706) -> 0.75 Lime (#65A30D) -> 1.00 Bright Green (#16A34A)
+  const stops: Array<[number, number, number, number]> = [
+    [0.0, 127, 29, 29],
+    [0.25, 220, 38, 38],
+    [0.5, 217, 119, 6],
+    [0.75, 101, 163, 13],
+    [1.0, 22, 163, 74],
+  ];
+
+  let r = stops[0][1];
+  let g = stops[0][2];
+  let b = stops[0][3];
+  for (let i = 0; i < stops.length - 1; i += 1) {
+    const [t0, r0, g0, b0] = stops[i];
+    const [t1, r1, g1, b1] = stops[i + 1];
+    if (t >= t0 && t <= t1) {
+      const local = (t - t0) / (t1 - t0);
+      r = Math.round(r0 + (r1 - r0) * local);
+      g = Math.round(g0 + (g1 - g0) * local);
+      b = Math.round(b0 + (b1 - b0) * local);
+      break;
+    }
   }
 
   const bg = `rgb(${r}, ${g}, ${b})`;
@@ -260,6 +267,41 @@ export function getRankHeatColors(
     color: '#FFFFFF',
     borderColor: bg,
   };
+}
+
+export function dedupeSpeakerQueue(queue: string[], excludeSpeakerId?: string): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const id of queue) {
+    if (!id || id === excludeSpeakerId || seen.has(id)) continue;
+    seen.add(id);
+    result.push(id);
+  }
+  return result;
+}
+
+export function isCountryInSpeakerList(
+  delegateId: string,
+  currentSpeakerId: string | undefined,
+  queue: string[],
+  delegateMap?: Map<string, Delegate>
+): boolean {
+  if (!delegateId) return false;
+  if (currentSpeakerId === delegateId || queue.includes(delegateId)) {
+    return true;
+  }
+  if (!delegateMap) return false;
+  const targetName = delegateMap.get(delegateId)?.countryName.trim().toLowerCase();
+  if (!targetName) return false;
+  if (
+    currentSpeakerId &&
+    delegateMap.get(currentSpeakerId)?.countryName.trim().toLowerCase() === targetName
+  ) {
+    return true;
+  }
+  return queue.some(
+    (qId) => delegateMap.get(qId)?.countryName.trim().toLowerCase() === targetName
+  );
 }
 
 export function clampStr(val: string, maxLen: number): string {

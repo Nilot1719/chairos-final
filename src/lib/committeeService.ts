@@ -21,6 +21,7 @@ import {
   BLUEPRINT_BOUNDS,
   clampStr,
   computeDisruptivenessScore,
+  dedupeSpeakerQueue,
   hashJoinPasscode,
   isValidJoinCodeFormat,
   isValidMixedJoinCode,
@@ -52,12 +53,25 @@ const CAUCUS_MODES: Array<'opening' | 'gsl' | 'mod' | 'unmod' | 'cow' | 'resolut
 ];
 
 function resolveMemberIds(ownerId: string, memberIds?: string[], actorId?: string): string[] {
-  const set = new Set<string>([ownerId]);
-  if (actorId) set.add(actorId);
+  const set = new Set<string>();
   (memberIds || []).forEach((id) => {
     if (id) set.add(id);
   });
+  if (ownerId) set.add(ownerId);
+  if (actorId) set.add(actorId);
   return Array.from(set).slice(0, 25);
+}
+
+function normalizeCountryCode(rawCode: string, fallbackName = ''): string {
+  const cleaned = rawCode.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
+  if (cleaned.length >= 2) {
+    return cleaned.slice(0, BLUEPRINT_BOUNDS.DELEGATE_CODE_MAX);
+  }
+  const fromName = fallbackName.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (fromName.length >= 2) {
+    return fromName.slice(0, 3);
+  }
+  return cleaned.length === 1 ? `${cleaned}X` : 'DEL';
 }
 
 async function appendManifestId(
@@ -286,7 +300,7 @@ export async function createCommitteeWithRoster(
         ownerId,
         memberIds,
         countryName: clampStr(country.name, BLUEPRINT_BOUNDS.DELEGATE_NAME_MAX),
-        countryCode: clampStr(country.code.toUpperCase() || 'UN', BLUEPRINT_BOUNDS.DELEGATE_CODE_MAX),
+        countryCode: normalizeCountryCode(country.code, country.name),
         speechesCount: 0,
         poisCount: 0,
         motionsProposedCount: 0,
@@ -305,6 +319,7 @@ export async function createCommitteeWithRoster(
       ownerId,
       memberIds,
       joinCode: resolvedJoinCode,
+      joinPassword: password.slice(0, BLUEPRINT_BOUNDS.JOIN_PASSWORD_MAX),
       name: cleanCommitteeName,
       activeSessionId: sessionId,
       activeTab: 'roll_call',
@@ -609,16 +624,17 @@ export async function setupOrRotateCommitteeJoin(params: {
     }
 
     const batch = writeBatch(db);
-    const committeePatch: Record<string, unknown> = { updatedAt: serverTimestamp() };
+    const committeePatch: Record<string, unknown> = {
+      joinPassword: password.slice(0, BLUEPRINT_BOUNDS.JOIN_PASSWORD_MAX),
+      updatedAt: serverTimestamp(),
+    };
     if (nextCode !== comData.joinCode) {
       committeePatch.joinCode = nextCode;
     }
     if (!hasMemberIds) {
       committeePatch.memberIds = memberIds;
     }
-    if (Object.keys(committeePatch).length > 1) {
-      batch.update(comRef, committeePatch);
-    }
+    batch.update(comRef, committeePatch);
 
     const ownerMemberRef = doc(db, 'committees', committeeId, 'members', ownerId);
     const ownerMemberSnap = await getDoc(ownerMemberRef);
@@ -736,7 +752,7 @@ export async function addDelegateToCommittee(params: {
       ownerId: params.ownerId,
       ...(params.memberIds ? { memberIds: resolvedMembers } : {}),
       countryName: clampStr(params.countryName, BLUEPRINT_BOUNDS.DELEGATE_NAME_MAX),
-      countryCode: clampStr(params.countryCode.toUpperCase() || 'UN', BLUEPRINT_BOUNDS.DELEGATE_CODE_MAX),
+      countryCode: normalizeCountryCode(params.countryCode, params.countryName),
       speechesCount: 0,
       poisCount: 0,
       motionsProposedCount: 0,
@@ -751,7 +767,7 @@ export async function addDelegateToCommittee(params: {
     });
 
     batch.update(doc(db, 'committees', params.committeeId), {
-      delegateCount: params.nextDelegateCount,
+      delegateCount: Math.max(1, Math.min(500, Math.round(params.nextDelegateCount))),
       updatedAt: serverTimestamp(),
     });
 
@@ -1190,6 +1206,12 @@ export async function updateCaucusState(
     if (typeof cleanPatch.topic === 'string') {
       cleanPatch.topic = clampStr(cleanPatch.topic, BLUEPRINT_BOUNDS.TOPIC_MAX);
     }
+    if (Array.isArray(cleanPatch.queue)) {
+      cleanPatch.queue = dedupeSpeakerQueue(
+        cleanPatch.queue,
+        typeof cleanPatch.currentSpeakerId === 'string' ? cleanPatch.currentSpeakerId : undefined
+      );
+    }
     const snap = await getDoc(ref);
     if (!snap.exists()) {
       const defaultSpk = mode === 'opening' ? 60 : 90;
@@ -1293,8 +1315,18 @@ export async function logSpeechAndAdvance(params: {
       });
     }
 
+    const cleanCaucusPatch = { ...params.caucusPatch };
+    if (Array.isArray(cleanCaucusPatch.queue)) {
+      cleanCaucusPatch.queue = dedupeSpeakerQueue(
+        cleanCaucusPatch.queue,
+        typeof cleanCaucusPatch.currentSpeakerId === 'string'
+          ? cleanCaucusPatch.currentSpeakerId
+          : undefined
+      );
+    }
+
     batch.update(caucusRef, {
-      ...params.caucusPatch,
+      ...cleanCaucusPatch,
       updatedAt: serverTimestamp(),
     });
 

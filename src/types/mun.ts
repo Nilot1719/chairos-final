@@ -37,6 +37,7 @@ export interface Committee {
   supermajorityFraction?: string;
   projectorKey?: string;
   joinCode?: string;
+  joinPassword?: string;
   memberIds?: string[];
   createdAt?: unknown;
   updatedAt?: unknown;

@@ -12,21 +12,24 @@ const envAppId = import.meta.env.VITE_FIREBASE_APP_ID?.trim();
 const envMeasurementId = import.meta.env.VITE_FIREBASE_MEASUREMENT_ID?.trim();
 const envDatabaseId = import.meta.env.VITE_FIREBASE_DATABASE_ID?.trim();
 
-const isCustomProject = Boolean(envProjectId && envProjectId !== firebaseConfig.projectId);
+const isCustomProject = Boolean(
+  (envProjectId && envProjectId !== firebaseConfig.projectId) ||
+    (envApiKey && envApiKey !== firebaseConfig.apiKey)
+);
 
-if (envApiKey && isCustomProject && (!envAuthDomain || !envAppId)) {
+if (envApiKey && isCustomProject && (!envProjectId || !envAuthDomain || !envAppId)) {
   console.warn(
-    'Custom VITE_FIREBASE_PROJECT_ID detected, make sure VITE_FIREBASE_AUTH_DOMAIN and VITE_FIREBASE_APP_ID are also configured in your environment variables.'
+    'Custom Firebase configuration detected. Make sure VITE_FIREBASE_PROJECT_ID, VITE_FIREBASE_AUTH_DOMAIN, and VITE_FIREBASE_APP_ID are all set in your environment variables.'
   );
 }
 
 const activeFirebaseConfig = envApiKey
   ? {
       apiKey: envApiKey,
-      authDomain: envAuthDomain || (isCustomProject ? `${envProjectId}.firebaseapp.com` : firebaseConfig.authDomain),
+      authDomain: envAuthDomain || (isCustomProject && envProjectId ? `${envProjectId}.firebaseapp.com` : firebaseConfig.authDomain),
       projectId: envProjectId || firebaseConfig.projectId,
       storageBucket:
-        envStorageBucket || (isCustomProject ? `${envProjectId}.firebasestorage.app` : firebaseConfig.storageBucket),
+        envStorageBucket || (isCustomProject && envProjectId ? `${envProjectId}.firebasestorage.app` : firebaseConfig.storageBucket),
       messagingSenderId:
         envMessagingSenderId || (isCustomProject ? '' : firebaseConfig.messagingSenderId),
       appId: envAppId || (isCustomProject ? '' : firebaseConfig.appId),
@@ -68,6 +71,33 @@ export interface FirestoreErrorInfo {
       email?: string | null;
     }[];
   };
+}
+
+export function formatFirestoreErrorMessage(error: unknown): string {
+  let rawMessage = error instanceof Error ? error.message : String(error || 'Unknown cloud error');
+  let pathInfo = '';
+
+  try {
+    const parsed = JSON.parse(rawMessage) as Partial<FirestoreErrorInfo>;
+    if (parsed && typeof parsed.error === 'string') {
+      rawMessage = parsed.error;
+      if (parsed.path) pathInfo = ` (${parsed.path})`;
+    }
+  } catch {
+    // rawMessage is plain text
+  }
+
+  const lower = rawMessage.toLowerCase();
+  if (lower.includes('permission') || lower.includes('insufficient')) {
+    return `Cloud sync permission denied${pathInfo}. If using your own Firebase project, publish the project's firestore.rules in Firebase Console -> Firestore Database -> Rules.`;
+  }
+  if (lower.includes('not-found') || lower.includes('database') && lower.includes('not exist')) {
+    return 'Cloud Firestore database not found. Create a Cloud Firestore database in Firebase Console.';
+  }
+  if (lower.includes('offline') || lower.includes('unavailable')) {
+    return 'Unable to reach Cloud Firestore right now. Check your connection and Firebase configuration.';
+  }
+  return rawMessage;
 }
 
 export function handleFirestoreError(

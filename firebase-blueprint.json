@@ -82,6 +82,11 @@
           "maxLength": 4,
           "pattern": "^[A-Z0-9]{4}$"
         },
+        "joinPassword": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 120
+        },
         "memberIds": {
           "type": "array",
           "items": {

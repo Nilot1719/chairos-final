@@ -10,7 +10,12 @@ import {
   X,
 } from 'lucide-react';
 import type { AttendanceStatus, CaucusState, Delegate, YieldType } from '../../types/mun';
-import { BLUEPRINT_BOUNDS, formatClock } from '../../lib/munRules';
+import {
+  BLUEPRINT_BOUNDS,
+  dedupeSpeakerQueue,
+  formatClock,
+  isCountryInSpeakerList,
+} from '../../lib/munRules';
 import { CountryFlag } from '../CountryFlag';
 import { EditableTimer } from '../EditableTimer';
 
@@ -69,7 +74,10 @@ export function GslTab({
     ? delegateMap.get(caucus.currentSpeakerId)
     : undefined;
 
-  const queue = caucus?.queue || [];
+  const queue = useMemo(
+    () => dedupeSpeakerQueue(caucus?.queue || [], caucus?.currentSpeakerId),
+    [caucus?.queue, caucus?.currentSpeakerId]
+  );
   const defaultSpeakerSecs = caucus?.speakerSeconds || 90;
   const yieldType = caucus?.yieldType || 'none';
   const yieldTargetId = caucus?.yieldTargetId || '';
@@ -119,6 +127,9 @@ export function GslTab({
 
   const handleAddToQueue = async (delegateId: string) => {
     if (!caucus) return;
+    if (isCountryInSpeakerList(delegateId, caucus.currentSpeakerId, queue, delegateMap)) {
+      return;
+    }
     if (!caucus.currentSpeakerId) {
       await onUpdateCaucus({
         currentSpeakerId: delegateId,
@@ -128,7 +139,7 @@ export function GslTab({
       });
     } else {
       await onUpdateCaucus({
-        queue: [...queue, delegateId],
+        queue: dedupeSpeakerQueue([...queue, delegateId], caucus.currentSpeakerId),
       });
     }
   };
@@ -532,19 +543,52 @@ export function GslTab({
           </div>
 
           <div className="grid grid-cols-2 gap-1.5 max-h-44 overflow-y-auto pr-0.5">
-            {filteredAddList.map((d) => (
-              <button
-                key={d.id}
-                type="button"
-                onClick={() => handleAddToQueue(d.id)}
-                className="px-2.5 py-1.5 bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-300 rounded-lg flex items-center gap-2 text-left transition-colors cursor-pointer"
-              >
-                <CountryFlag code={d.countryCode} name={d.countryName} size="sm" />
-                <span className="text-xs font-medium text-slate-800 truncate">
-                  {d.countryName}
-                </span>
-              </button>
-            ))}
+            {filteredAddList.map((d) => {
+              const inCurrent = currentSpeaker?.id === d.id;
+              const qPos = queue.indexOf(d.id);
+              const alreadyListed = isCountryInSpeakerList(
+                d.id,
+                currentSpeaker?.id,
+                queue,
+                delegateMap
+              );
+              return (
+                <button
+                  key={d.id}
+                  type="button"
+                  disabled={alreadyListed}
+                  onClick={() => handleAddToQueue(d.id)}
+                  title={
+                    alreadyListed
+                      ? `${d.countryName} is already in the speakers list`
+                      : `Add ${d.countryName} to GSL`
+                  }
+                  className={`px-2.5 py-1.5 border rounded-lg flex items-center justify-between gap-1.5 text-left transition-colors ${
+                    alreadyListed
+                      ? 'bg-slate-100 border-slate-200 opacity-60 cursor-not-allowed'
+                      : 'bg-slate-50 hover:bg-blue-50 border-slate-200 hover:border-blue-300 cursor-pointer'
+                  }`}
+                >
+                  <span className="flex items-center gap-2 min-w-0">
+                    <CountryFlag code={d.countryCode} name={d.countryName} size="sm" />
+                    <span className="text-xs font-medium text-slate-800 truncate">
+                      {d.countryName}
+                    </span>
+                  </span>
+                  {inCurrent ? (
+                    <span className="text-[10px] font-semibold text-[#0047AB] shrink-0">Now</span>
+                  ) : qPos !== -1 ? (
+                    <span className="text-[10px] font-mono-tabular text-slate-500 shrink-0">
+                      #{qPos + 1}
+                    </span>
+                  ) : alreadyListed ? (
+                    <span className="text-[10px] font-semibold text-slate-400 shrink-0">
+                      Added
+                    </span>
+                  ) : null}
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>

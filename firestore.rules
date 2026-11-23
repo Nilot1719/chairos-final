@@ -61,12 +61,6 @@ service cloud.firestore {
       );
     }
 
-    function isSubdocListAuthorized(data) {
-      return isSignedIn() && (
-        data.ownerId == request.auth.uid ||
-        ('memberIds' in data && data.memberIds is list && request.auth.uid in data.memberIds)
-      );
-    }
 
     function isCommitteeOwner(committeeId) {
       return isSignedIn() &&
@@ -130,7 +124,7 @@ service cloud.firestore {
       return data.keys().hasAll(['ownerId', 'name', 'activeSessionId', 'activeTab', 'delegateCount', 'sessionCount', 'createdAt', 'updatedAt']) &&
         data.keys().hasOnly([
           'ownerId', 'name', 'activeSessionId', 'activeTab', 'delegateCount', 'sessionCount',
-          'simpleMajorityFraction', 'supermajorityFraction', 'projectorKey', 'joinCode', 'memberIds',
+          'simpleMajorityFraction', 'supermajorityFraction', 'projectorKey', 'joinCode', 'joinPassword', 'memberIds',
           'createdAt', 'updatedAt'
         ]) &&
         isValidId(data.ownerId) &&
@@ -143,6 +137,7 @@ service cloud.firestore {
         (!('supermajorityFraction' in data) || isBoundedString(data.supermajorityFraction, 1, 20)) &&
         (!('projectorKey' in data) || isValidId(data.projectorKey)) &&
         (!('joinCode' in data) || isValidJoinCode(data.joinCode)) &&
+        (!('joinPassword' in data) || isBoundedString(data.joinPassword, 0, 120)) &&
         (!('memberIds' in data) || (isValidMemberList(data.memberIds) && data.ownerId in data.memberIds)) &&
         data.createdAt is timestamp &&
         data.updatedAt is timestamp;
@@ -236,7 +231,7 @@ service cloud.firestore {
         (data.quorumRatio is float || data.quorumRatio is int) &&
         (data.quorumRatio == 0.5 || data.quorumRatio == 0.333) &&
         data.attendance is map &&
-        data.attendance.keys().size() <= 300 &&
+        data.attendance.keys().size() <= 500 &&
         (!('memberIds' in data) || isValidMemberList(data.memberIds)) &&
         data.createdAt is timestamp &&
         data.updatedAt is timestamp;
@@ -452,7 +447,8 @@ service cloud.firestore {
 
     match /committees/{committeeId} {
       allow get: if isSignedIn() && isValidId(committeeId) && isCommitteeMemberUid(existing());
-      allow list: if isCommitteeMemberUid(existing());
+      allow list: if isSignedIn() && existing().ownerId == request.auth.uid;
+      allow list: if isSignedIn() && request.auth.uid in existing().memberIds;
       allow create: if isSignedIn() &&
         isValidId(committeeId) &&
         isValidCommittee(incoming()) &&
@@ -488,12 +484,16 @@ service cloud.firestore {
               incoming().diff(existing()).affectedKeys().hasOnly(['name', 'updatedAt']) ||
               incoming().diff(existing()).affectedKeys().hasOnly(['name', 'delegateCount', 'updatedAt']) ||
               incoming().diff(existing()).affectedKeys().hasOnly(['joinCode', 'updatedAt']) ||
+              incoming().diff(existing()).affectedKeys().hasOnly(['joinPassword', 'updatedAt']) ||
+              incoming().diff(existing()).affectedKeys().hasOnly(['joinCode', 'joinPassword', 'updatedAt']) ||
               (
                 !('memberIds' in existing()) &&
                 incoming().memberIds == [request.auth.uid] &&
                 (
                   incoming().diff(existing()).affectedKeys().hasOnly(['memberIds', 'updatedAt']) ||
-                  incoming().diff(existing()).affectedKeys().hasOnly(['joinCode', 'memberIds', 'updatedAt'])
+                  incoming().diff(existing()).affectedKeys().hasOnly(['joinCode', 'memberIds', 'updatedAt']) ||
+                  incoming().diff(existing()).affectedKeys().hasOnly(['joinPassword', 'memberIds', 'updatedAt']) ||
+                  incoming().diff(existing()).affectedKeys().hasOnly(['joinCode', 'joinPassword', 'memberIds', 'updatedAt'])
                 )
               ) ||
               (
@@ -532,7 +532,8 @@ service cloud.firestore {
 
       match /members/{memberId} {
         allow get: if isSignedIn() && isValidId(committeeId) && isValidId(memberId) && isCommitteeMember(committeeId);
-        allow list: if isSubdocListAuthorized(existing());
+        allow list: if isSignedIn() && existing().ownerId == request.auth.uid;
+        allow list: if isSignedIn() && request.auth.uid in existing().memberIds;
         allow create: if isSignedIn() &&
           isValidId(committeeId) &&
           isValidId(memberId) &&
@@ -615,7 +616,8 @@ service cloud.firestore {
 
       match /delegates/{delegateId} {
         allow get: if isSignedIn() && isValidId(committeeId) && isValidId(delegateId) && isCommitteeMember(committeeId);
-        allow list: if isSubdocListAuthorized(existing());
+        allow list: if isSignedIn() && existing().ownerId == request.auth.uid;
+        allow list: if isSignedIn() && request.auth.uid in existing().memberIds;
         allow create: if isSignedIn() &&
           isValidId(committeeId) &&
           isValidId(delegateId) &&
@@ -668,7 +670,8 @@ service cloud.firestore {
 
       match /sessions/{sessionId} {
         allow get: if isSignedIn() && isValidId(committeeId) && isValidId(sessionId) && isCommitteeMember(committeeId);
-        allow list: if isSubdocListAuthorized(existing());
+        allow list: if isSignedIn() && existing().ownerId == request.auth.uid;
+        allow list: if isSignedIn() && request.auth.uid in existing().memberIds;
         allow create: if isSignedIn() &&
           isValidId(committeeId) &&
           isValidId(sessionId) &&
@@ -700,7 +703,8 @@ service cloud.firestore {
 
       match /motions/{motionId} {
         allow get: if isSignedIn() && isValidId(committeeId) && isValidId(motionId) && isCommitteeMember(committeeId);
-        allow list: if isSubdocListAuthorized(existing());
+        allow list: if isSignedIn() && existing().ownerId == request.auth.uid;
+        allow list: if isSignedIn() && request.auth.uid in existing().memberIds;
         allow create: if isSignedIn() &&
           isValidId(committeeId) &&
           isValidId(motionId) &&
@@ -735,7 +739,8 @@ service cloud.firestore {
 
       match /logs/{logId} {
         allow get: if isSignedIn() && isValidId(committeeId) && isValidId(logId) && isCommitteeMember(committeeId);
-        allow list: if isSubdocListAuthorized(existing());
+        allow list: if isSignedIn() && existing().ownerId == request.auth.uid;
+        allow list: if isSignedIn() && request.auth.uid in existing().memberIds;
         allow create: if isSignedIn() &&
           isValidId(committeeId) &&
           isValidId(logId) &&
@@ -763,7 +768,8 @@ service cloud.firestore {
 
       match /caucuses/{caucusMode} {
         allow get: if isSignedIn() && isValidId(committeeId) && isValidId(caucusMode) && isCommitteeMember(committeeId);
-        allow list: if isSubdocListAuthorized(existing());
+        allow list: if isSignedIn() && existing().ownerId == request.auth.uid;
+        allow list: if isSignedIn() && request.auth.uid in existing().memberIds;
         allow create: if isSignedIn() &&
           isValidId(committeeId) &&
           isValidId(caucusMode) &&
@@ -808,7 +814,8 @@ service cloud.firestore {
 
       match /blocs/{blocId} {
         allow get: if isSignedIn() && isValidId(committeeId) && isValidId(blocId) && isCommitteeMember(committeeId);
-        allow list: if isSubdocListAuthorized(existing());
+        allow list: if isSignedIn() && existing().ownerId == request.auth.uid;
+        allow list: if isSignedIn() && request.auth.uid in existing().memberIds;
         allow create: if isSignedIn() &&
           isValidId(committeeId) &&
           isValidId(blocId) &&

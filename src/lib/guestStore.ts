@@ -2,6 +2,7 @@ import {
   BLUEPRINT_BOUNDS,
   clampStr,
   computeDisruptivenessScore,
+  dedupeSpeakerQueue,
   makeJoinCode,
   makeSafeId,
   normalizeJoinCode,
@@ -844,9 +845,16 @@ export function guestUpdateCaucusState(
   if (!b) return;
   const fallback =
     mode === 'opening' ? defaultOpeningCaucus(Date.now()) : defaultResolutionsCaucus(Date.now());
+  const prev = b.caucuses[mode] || fallback;
+  const nextSpeaker =
+    typeof patch.currentSpeakerId === 'string' ? patch.currentSpeakerId : prev.currentSpeakerId;
+  const cleanPatch = { ...patch };
+  if (Array.isArray(cleanPatch.queue)) {
+    cleanPatch.queue = dedupeSpeakerQueue(cleanPatch.queue, nextSpeaker);
+  }
   b.caucuses[mode] = {
-    ...(b.caucuses[mode] || fallback),
-    ...patch,
+    ...prev,
+    ...cleanPatch,
     updatedAt: Date.now(),
   };
   saveDb(db);
@@ -913,9 +921,18 @@ export function guestLogSpeechAndAdvance(params: {
     del.updatedAt = now;
   }
 
+  const prev = b.caucuses[modeKey];
+  const nextSpeaker =
+    typeof params.caucusPatch.currentSpeakerId === 'string'
+      ? params.caucusPatch.currentSpeakerId
+      : prev?.currentSpeakerId;
+  const cleanPatch = { ...params.caucusPatch };
+  if (Array.isArray(cleanPatch.queue)) {
+    cleanPatch.queue = dedupeSpeakerQueue(cleanPatch.queue, nextSpeaker);
+  }
   b.caucuses[modeKey] = {
-    ...b.caucuses[modeKey],
-    ...params.caucusPatch,
+    ...prev,
+    ...cleanPatch,
     updatedAt: now,
   };
 
