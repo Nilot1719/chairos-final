@@ -860,6 +860,15 @@ export async function syncProjectorSnapshot(
       twoThirdsMajority: Math.max(0, Math.min(500, Math.round(snapshot.twoThirdsMajority))),
       simpleFractionLabel: clampStr(snapshot.simpleFractionLabel || '1/2', BLUEPRINT_BOUNDS.FRACTION_MAX),
       superFractionLabel: clampStr(snapshot.superFractionLabel || '2/3', BLUEPRINT_BOUNDS.FRACTION_MAX),
+      pendingMotions: (snapshot.pendingMotions || []).slice(0, 5).map((motion) => ({
+        actionType: motion.actionType,
+        proposerName: clampStr(motion.proposerName, BLUEPRINT_BOUNDS.DELEGATE_NAME_MAX),
+        proposerCode: clampStr(motion.proposerCode, BLUEPRINT_BOUNDS.DELEGATE_CODE_MAX),
+        topic: clampStr(motion.topic, BLUEPRINT_BOUNDS.TOPIC_MAX),
+        totalSeconds: Math.max(0, Math.min(7200, Math.round(motion.totalSeconds))),
+        speakerSeconds: Math.max(0, Math.min(600, Math.round(motion.speakerSeconds))),
+        disruptivenessScore: Math.max(0, Math.min(100000, Math.round(motion.disruptivenessScore))),
+      })),
     };
 
     const existingSnap = await getDoc(ref);

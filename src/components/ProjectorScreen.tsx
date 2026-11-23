@@ -25,7 +25,7 @@ const MODE_LABELS: Record<ProceduralTab, string> = {
 function buildSnapshotFromGuest(committeeId: string): ProjectorSnapshot | null {
   const bundle = getGuestBundle(committeeId);
   if (!bundle) return null;
-  const { committee, delegates, sessions, caucuses } = bundle;
+  const { committee, delegates, sessions, caucuses, motions } = bundle;
   const sortedSessions = [...sessions].sort((a, b) => a.order - b.order);
   const activeSession =
     sortedSessions.find((s) => s.id === committee.activeSessionId) || sortedSessions[0];
@@ -68,6 +68,29 @@ function buildSnapshotFromGuest(committeeId: string): ProjectorSnapshot | null {
     .map((id) => delegateMap.get(id))
     .filter((d): d is Delegate => Boolean(d))
     .map((d) => `${d.countryCode}|${d.countryName}`);
+  const pendingMotions = motions
+    .filter((motion) => motion.status === 'pending' && motion.sessionId === activeSession?.id)
+    .sort((a, b) => b.disruptivenessScore - a.disruptivenessScore)
+    .slice(0, 5)
+    .map(
+      ({
+        actionType,
+        proposerName,
+        proposerCode,
+        topic,
+        totalSeconds,
+        speakerSeconds,
+        disruptivenessScore,
+      }) => ({
+        actionType,
+        proposerName,
+        proposerCode,
+        topic,
+        totalSeconds,
+        speakerSeconds,
+        disruptivenessScore,
+      })
+    );
 
   return {
     ownerId: 'guest',
@@ -97,6 +120,7 @@ function buildSnapshotFromGuest(committeeId: string): ProjectorSnapshot | null {
     twoThirdsMajority: quorum.twoThirdsMajority,
     simpleFractionLabel: quorum.simpleFractionLabel,
     superFractionLabel: quorum.superFractionLabel,
+    pendingMotions,
   };
 }
 
@@ -255,36 +279,80 @@ export function ProjectorScreen() {
         </h2>
 
         {snapshot.activeTab === 'roll_call' || snapshot.activeTab === 'motions' ? (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 w-full max-w-3xl">
-            <div className="p-6 bg-slate-50 border border-slate-200 rounded-2xl">
-              <div className="font-mono-tabular text-4xl font-bold text-slate-900">
-                {snapshot.activeTotal}
+          snapshot.activeTab === 'motions' ? (
+            <div className="w-full max-w-4xl space-y-3 text-left">
+              <div className="text-sm font-semibold uppercase tracking-wider text-slate-500">
+                Pending motions · highest disruption first
               </div>
-              <div className="text-sm text-slate-600 mt-1">Present Delegations</div>
+              {(snapshot.pendingMotions || []).length === 0 ? (
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-8 text-center text-lg text-slate-500">
+                  No pending motions
+                </div>
+              ) : (
+                (snapshot.pendingMotions || []).map((motion, index) => (
+                  <div
+                    key={`${motion.actionType}-${motion.proposerCode}-${motion.topic}`}
+                    className={`flex items-center gap-5 rounded-2xl border p-5 ${
+                      index === 0
+                        ? 'border-[#0047AB] bg-blue-50'
+                        : 'border-slate-200 bg-slate-50'
+                    }`}
+                  >
+                    <span className="font-mono-tabular text-3xl font-bold text-slate-400">
+                      {index + 1}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="font-display text-xl font-bold text-slate-900">
+                        {motion.topic || motion.actionType.toUpperCase()}
+                      </div>
+                      <div className="mt-1 text-sm text-slate-600">
+                        {motion.actionType.toUpperCase()} · {motion.proposerName} ({motion.proposerCode})
+                        {motion.totalSeconds > 0 && ` · ${formatClock(motion.totalSeconds)}`}
+                        {motion.speakerSeconds > 0 && ` / speaker ${formatClock(motion.speakerSeconds)}`}
+                      </div>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <div className="font-mono-tabular text-2xl font-bold text-[#0047AB]">
+                        {motion.disruptivenessScore.toLocaleString()}
+                      </div>
+                      <div className="text-xs uppercase tracking-wide text-slate-500">Disruption</div>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
-            <div className="p-6 bg-slate-50 border border-slate-200 rounded-2xl">
-              <div className="font-mono-tabular text-4xl font-bold text-green-700">
-                {snapshot.pvCount}
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 w-full max-w-3xl">
+              <div className="p-6 bg-slate-50 border border-slate-200 rounded-2xl">
+                <div className="font-mono-tabular text-4xl font-bold text-slate-900">
+                  {snapshot.activeTotal}
+                </div>
+                <div className="text-sm text-slate-600 mt-1">Present Delegations</div>
               </div>
-              <div className="text-sm text-slate-600 mt-1">Present &amp; Voting</div>
+              <div className="p-6 bg-slate-50 border border-slate-200 rounded-2xl">
+                <div className="font-mono-tabular text-4xl font-bold text-green-700">
+                  {snapshot.pvCount}
+                </div>
+                <div className="text-sm text-slate-600 mt-1">Present &amp; Voting</div>
+              </div>
+              <div className="p-6 bg-slate-50 border border-slate-200 rounded-2xl">
+                <div className="font-mono-tabular text-4xl font-bold text-[#0047AB]">
+                  {snapshot.simpleMajority}
+                </div>
+                <div className="text-sm text-slate-600 mt-1">
+                  Simple Majority ({snapshot.simpleFractionLabel})
+                </div>
+              </div>
+              <div className="p-6 bg-slate-50 border border-slate-200 rounded-2xl">
+                <div className="font-mono-tabular text-4xl font-bold text-slate-900">
+                  {snapshot.twoThirdsMajority}
+                </div>
+                <div className="text-sm text-slate-600 mt-1">
+                  Supermajority ({snapshot.superFractionLabel})
+                </div>
+              </div>
             </div>
-            <div className="p-6 bg-slate-50 border border-slate-200 rounded-2xl">
-              <div className="font-mono-tabular text-4xl font-bold text-[#0047AB]">
-                {snapshot.simpleMajority}
-              </div>
-              <div className="text-sm text-slate-600 mt-1">
-                Simple Majority ({snapshot.simpleFractionLabel})
-              </div>
-            </div>
-            <div className="p-6 bg-slate-50 border border-slate-200 rounded-2xl">
-              <div className="font-mono-tabular text-4xl font-bold text-slate-900">
-                {snapshot.twoThirdsMajority}
-              </div>
-              <div className="text-sm text-slate-600 mt-1">
-                Supermajority ({snapshot.superFractionLabel})
-              </div>
-            </div>
-          </div>
+          )
         ) : (
           <div className="w-full space-y-8">
             <div

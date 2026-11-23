@@ -317,6 +317,34 @@ service cloud.firestore {
       return q is list && q.size() <= 10 && (q.size() == 0 || q[0] is string);
     }
 
+    function isValidProjectedMotion(motion) {
+      return motion is map &&
+        motion.keys().hasOnly([
+          'actionType', 'proposerName', 'proposerCode', 'topic',
+          'totalSeconds', 'speakerSeconds', 'disruptivenessScore'
+        ]) &&
+        motion.keys().hasAll([
+          'actionType', 'proposerName', 'proposerCode', 'topic',
+          'totalSeconds', 'speakerSeconds', 'disruptivenessScore'
+        ]) &&
+        motion.actionType in ['gsl', 'mod', 'unmod', 'cow', 'other'] &&
+        isBoundedString(motion.proposerName, 1, 100) &&
+        isBoundedString(motion.proposerCode, 2, 10) &&
+        isBoundedString(motion.topic, 0, 200) &&
+        isBoundedInt(motion.totalSeconds, 0, 7200) &&
+        isBoundedInt(motion.speakerSeconds, 0, 600) &&
+        isBoundedInt(motion.disruptivenessScore, 0, 100000);
+    }
+
+    function isValidProjectedMotions(motions) {
+      return motions is list && motions.size() <= 5 &&
+        (motions.size() < 1 || isValidProjectedMotion(motions[0])) &&
+        (motions.size() < 2 || isValidProjectedMotion(motions[1])) &&
+        (motions.size() < 3 || isValidProjectedMotion(motions[2])) &&
+        (motions.size() < 4 || isValidProjectedMotion(motions[3])) &&
+        (motions.size() < 5 || isValidProjectedMotion(motions[4]));
+    }
+
     function isValidProjectorSnapshot(data) {
       return data.keys().hasAll([
           'ownerId', 'committeeId', 'committeeName', 'sessionName', 'activeTab', 'modeDisplayLabel',
@@ -332,6 +360,7 @@ service cloud.firestore {
           'timerRunning', 'timerUpdatedAtMs', 'isResReading', 'currentSpeakerName', 'currentSpeakerCode',
           'yieldType', 'upcomingQueue', 'activeTotal', 'totalDelegations', 'pvCount', 'quorumNeeded',
           'quorumMet', 'simpleMajority', 'twoThirdsMajority', 'simpleFractionLabel', 'superFractionLabel',
+          'pendingMotions',
           'createdAt', 'updatedAt'
         ]) &&
         isValidId(data.ownerId) &&
@@ -362,6 +391,7 @@ service cloud.firestore {
         isBoundedInt(data.twoThirdsMajority, 0, 500) &&
         isBoundedString(data.simpleFractionLabel, 1, 20) &&
         isBoundedString(data.superFractionLabel, 1, 20) &&
+        (!('pendingMotions' in data) || isValidProjectedMotions(data.pendingMotions)) &&
         data.createdAt is timestamp &&
         data.updatedAt is timestamp;
     }

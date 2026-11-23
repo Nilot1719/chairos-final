@@ -407,6 +407,29 @@ export function CommitteeWorkspace({
       .map((id) => delegateMap.get(id))
       .filter((d): d is Delegate => Boolean(d))
       .map((d) => `${d.countryCode}|${d.countryName}`);
+    const pendingMotions = motions
+      .filter((motion) => motion.status === 'pending' && motion.sessionId === activeSession?.id)
+      .sort((a, b) => b.disruptivenessScore - a.disruptivenessScore)
+      .slice(0, 5)
+      .map(
+        ({
+          actionType,
+          proposerName,
+          proposerCode,
+          topic,
+          totalSeconds,
+          speakerSeconds,
+          disruptivenessScore,
+        }) => ({
+          actionType,
+          proposerName,
+          proposerCode,
+          topic,
+          totalSeconds,
+          speakerSeconds,
+          disruptivenessScore,
+        })
+      );
 
     return {
       ownerId: committee.ownerId,
@@ -436,8 +459,19 @@ export function CommitteeWorkspace({
       twoThirdsMajority: quorum.twoThirdsMajority,
       simpleFractionLabel: quorum.simpleFractionLabel,
       superFractionLabel: quorum.superFractionLabel,
+      pendingMotions,
     };
-  }, [isGuest, user, committee, activeSession?.name, caucusMap, delegates, quorum]);
+  }, [
+    isGuest,
+    user,
+    committee,
+    activeSession?.id,
+    activeSession?.name,
+    caucusMap,
+    delegates,
+    motions,
+    quorum,
+  ]);
 
   useEffect(() => {
     if (isGuest || !user || !committee?.projectorKey || !cloudProjectorPayload) return;

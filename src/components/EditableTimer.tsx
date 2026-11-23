@@ -21,6 +21,7 @@ export function EditableTimer({
   const [editing, setEditing] = useState(false);
   const [minInput, setMinInput] = useState('0');
   const [secInput, setSecInput] = useState('00');
+  const [inputError, setInputError] = useState('');
 
   useEffect(() => {
     if (!editing) {
@@ -36,16 +37,29 @@ export function EditableTimer({
     const s = Math.max(0, seconds) % 60;
     setMinInput(String(m));
     setSecInput(String(s).padStart(2, '0'));
+    setInputError('');
     setEditing(true);
   };
 
   const handleApply = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    const mins = Math.max(0, parseInt(minInput || '0', 10) || 0);
-    const secs = Math.max(0, parseInt(secInput || '0', 10) || 0);
+    const mins = Number(minInput || '0');
+    const secs = Number(secInput || '0');
+    if (
+      !Number.isInteger(mins) ||
+      mins < 0 ||
+      mins > Math.floor(maxSeconds / 60) ||
+      !Number.isInteger(secs) ||
+      secs < 0 ||
+      secs > 59
+    ) {
+      setInputError(`Enter minutes up to ${Math.floor(maxSeconds / 60)} and seconds from 0 to 59.`);
+      return;
+    }
     const total = Math.max(0, Math.min(maxSeconds, mins * 60 + secs));
     onCommitSeconds(total);
     setEditing(false);
+    setInputError('');
   };
 
   const sizeClasses =
@@ -64,31 +78,37 @@ export function EditableTimer({
 
   if (editing) {
     return (
-      <form onSubmit={handleApply} className="inline-flex flex-col items-start gap-1.5">
+      <form onSubmit={handleApply} className="inline-flex flex-col items-start gap-2">
         {label && (
           <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
             {label}
           </span>
         )}
-        <div className="flex items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-2">
           <input
-            type="number"
-            min={0}
-            max={Math.floor(maxSeconds / 60)}
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
             aria-label="Minutes"
             autoFocus
             value={minInput}
-            onChange={(e) => setMinInput(e.target.value)}
+            onChange={(e) => {
+              setMinInput(e.target.value.replace(/\D/g, ''));
+              setInputError('');
+            }}
             className="w-16 px-2 py-1.5 text-lg font-mono-tabular font-bold text-center bg-white border border-[#0047AB] rounded-lg text-slate-900 focus:outline-none"
           />
-          <span className="font-mono-tabular text-lg font-bold text-slate-500">:</span>
+          <span className="font-mono-tabular text-lg font-bold text-slate-500 px-0.5">:</span>
           <input
-            type="number"
-            min={0}
-            max={59}
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
             aria-label="Seconds"
             value={secInput}
-            onChange={(e) => setSecInput(e.target.value)}
+            onChange={(e) => {
+              setSecInput(e.target.value.replace(/\D/g, '').slice(0, 2));
+              setInputError('');
+            }}
             className="w-16 px-2 py-1.5 text-lg font-mono-tabular font-bold text-center bg-white border border-[#0047AB] rounded-lg text-slate-900 focus:outline-none"
           />
           <button
@@ -105,6 +125,7 @@ export function EditableTimer({
             Cancel
           </button>
         </div>
+        {inputError && <span role="alert" className="text-xs text-red-600">{inputError}</span>}
       </form>
     );
   }
@@ -123,8 +144,8 @@ export function EditableTimer({
         className={`group text-left font-mono-tabular ${sizeClasses} font-bold tracking-tight ${colorClass} hover:opacity-80 transition-opacity cursor-pointer`}
       >
         {formatClock(seconds)}
-        <span className="block text-[11px] font-sans font-medium text-slate-400 group-hover:text-[#0047AB] transition-colors mt-0.5">
-          Click time to type MM:SS
+        <span className="mt-2 block text-[11px] font-sans font-medium text-slate-400 group-hover:text-[#0047AB] transition-colors">
+          Click to edit time (MM:SS)
         </span>
       </button>
     </div>

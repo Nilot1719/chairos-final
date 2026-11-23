@@ -210,6 +210,15 @@ export interface ProjectorSnapshot {
   twoThirdsMajority: number;
   simpleFractionLabel: string;
   superFractionLabel: string;
+  pendingMotions?: Array<{
+    actionType: MotionActionType;
+    proposerName: string;
+    proposerCode: string;
+    topic: string;
+    totalSeconds: number;
+    speakerSeconds: number;
+    disruptivenessScore: number;
+  }>;
   createdAt?: unknown;
   updatedAt?: unknown;
 }

@@ -9,7 +9,7 @@ interface LandingViewProps {
 
 export function LandingView({ onSignIn, onEnterGuest, loading, error }: LandingViewProps) {
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
+    <div className="min-h-screen bg-white flex flex-col">
       <header className="w-full bg-white border-b border-slate-200">
         <div className="max-w-[1200px] mx-auto px-6 py-4 flex items-center justify-between gap-8">
           <div className="flex items-center gap-2.5 whitespace-nowrap shrink-0">
@@ -37,8 +37,8 @@ export function LandingView({ onSignIn, onEnterGuest, loading, error }: LandingV
       </header>
 
       <main className="flex-1 flex items-center justify-center px-6 py-16">
-        <div className="max-w-[1000px] w-full grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
-          <div className="lg:col-span-7 space-y-6">
+        <div className="max-w-3xl w-full">
+          <div className="space-y-6">
             <div className="flex items-center gap-3">
               <span className="inline-flex items-center justify-center w-11 h-11 rounded-xl bg-[#0047AB] text-white">
                 <Gavel className="w-6 h-6" />
@@ -47,14 +47,6 @@ export function LandingView({ onSignIn, onEnterGuest, loading, error }: LandingV
                 ChairOS
               </h1>
             </div>
-
-            <p className="text-xl sm:text-2xl font-medium text-slate-700 leading-snug max-w-xl [text-wrap:balance]">
-              The premier delegate-tracking software for the Thai MUN Circuit.
-            </p>
-
-            <p className="text-sm sm:text-base text-slate-600 leading-relaxed max-w-lg">
-              Run Roll Call with instant quorum and majority math, sort motions by disruptiveness, track POIs and yields across GSL, Moderated, Unmoderated, and COW debate, and project clean timers to the room.
-            </p>
 
             {error && (
               <div
@@ -92,29 +84,6 @@ export function LandingView({ onSignIn, onEnterGuest, loading, error }: LandingV
             </div>
           </div>
 
-          <div className="lg:col-span-5 bg-white border border-slate-200 rounded-xl p-6 space-y-5">
-            <h2 className="font-display text-sm font-semibold text-slate-900">
-              Built for Fast-Paced Dais Workflows
-            </h2>
-            <div className="divide-y divide-slate-100 text-sm">
-              <div className="py-3 flex items-baseline justify-between gap-4">
-                <span className="font-medium text-slate-800">Thai MUN Hybrid Rules</span>
-                <span className="text-xs text-slate-500 font-mono-tabular">POIs · Yields · Quorum</span>
-              </div>
-              <div className="py-3 flex items-baseline justify-between gap-4">
-                <span className="font-medium text-slate-800">All 4 Debate Formats</span>
-                <span className="text-xs text-slate-500 font-mono-tabular">GSL · Mod · Unmod · COW</span>
-              </div>
-              <div className="py-3 flex items-baseline justify-between gap-4">
-                <span className="font-medium text-slate-800">Delegate Room Projector</span>
-                <span className="text-xs text-slate-500 font-mono-tabular">Timers &amp; Queue Only</span>
-              </div>
-              <div className="pt-3 flex items-baseline justify-between gap-4">
-                <span className="font-medium text-slate-800">Post-Conference Export</span>
-                <span className="text-xs text-slate-500 font-mono-tabular">CSV &amp; PDF Dossier</span>
-              </div>
-            </div>
-          </div>
         </div>
       </main>
     </div>
