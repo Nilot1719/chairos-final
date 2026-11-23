@@ -242,6 +242,16 @@ export function ProjectorScreen() {
     return { code: item.slice(0, idx) || 'UN', name: item.slice(idx + 1) };
   });
 
+  if (snapshot.activeTab === 'roll_call') {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center p-8">
+        <h1 className="font-display text-5xl sm:text-7xl font-bold text-slate-900">
+          Roll Call
+        </h1>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-white flex flex-col justify-between p-8 sm:p-12">
       {/* Projector Top Header */}
@@ -278,9 +288,8 @@ export function ProjectorScreen() {
           {snapshot.topic || snapshot.modeDisplayLabel}
         </h2>
 
-        {snapshot.activeTab === 'roll_call' || snapshot.activeTab === 'motions' ? (
-          snapshot.activeTab === 'motions' ? (
-            <div className="w-full max-w-4xl space-y-3 text-left">
+        {snapshot.activeTab === 'motions' ? (
+          <div className="w-full max-w-4xl space-y-3 text-left">
               <div className="text-sm font-semibold uppercase tracking-wider text-slate-500">
                 Pending motions · highest disruption first
               </div>
@@ -320,39 +329,7 @@ export function ProjectorScreen() {
                   </div>
                 ))
               )}
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 w-full max-w-3xl">
-              <div className="p-6 bg-slate-50 border border-slate-200 rounded-2xl">
-                <div className="font-mono-tabular text-4xl font-bold text-slate-900">
-                  {snapshot.activeTotal}
-                </div>
-                <div className="text-sm text-slate-600 mt-1">Present Delegations</div>
-              </div>
-              <div className="p-6 bg-slate-50 border border-slate-200 rounded-2xl">
-                <div className="font-mono-tabular text-4xl font-bold text-green-700">
-                  {snapshot.pvCount}
-                </div>
-                <div className="text-sm text-slate-600 mt-1">Present &amp; Voting</div>
-              </div>
-              <div className="p-6 bg-slate-50 border border-slate-200 rounded-2xl">
-                <div className="font-mono-tabular text-4xl font-bold text-[#0047AB]">
-                  {snapshot.simpleMajority}
-                </div>
-                <div className="text-sm text-slate-600 mt-1">
-                  Simple Majority ({snapshot.simpleFractionLabel})
-                </div>
-              </div>
-              <div className="p-6 bg-slate-50 border border-slate-200 rounded-2xl">
-                <div className="font-mono-tabular text-4xl font-bold text-slate-900">
-                  {snapshot.twoThirdsMajority}
-                </div>
-                <div className="text-sm text-slate-600 mt-1">
-                  Supermajority ({snapshot.superFractionLabel})
-                </div>
-              </div>
-            </div>
-          )
+          </div>
         ) : (
           <div className="w-full space-y-8">
             <div

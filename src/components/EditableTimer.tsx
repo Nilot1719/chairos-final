@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Pencil } from 'lucide-react';
 import { formatClock } from '../lib/munRules';
 
 interface EditableTimerProps {
@@ -140,13 +141,15 @@ export function EditableTimer({
       <button
         type="button"
         onClick={handleOpenEdit}
-        title="Click to type custom time (MM:SS)"
-        className={`group text-left font-mono-tabular ${sizeClasses} font-bold tracking-tight ${colorClass} hover:opacity-80 transition-opacity cursor-pointer`}
+        title="Edit time"
+        aria-label={`Edit timer, ${formatClock(seconds)}`}
+        className={`group inline-flex items-center gap-2 text-left font-mono-tabular ${sizeClasses} font-bold tracking-tight ${colorClass} hover:opacity-80 transition-opacity cursor-pointer`}
       >
         {formatClock(seconds)}
-        <span className="mt-2 block text-[11px] font-sans font-medium text-slate-400 group-hover:text-[#0047AB] transition-colors">
-          Click to edit time (MM:SS)
-        </span>
+        <Pencil
+          aria-hidden="true"
+          className="h-4 w-4 shrink-0 text-slate-400 transition-colors group-hover:text-[#0047AB]"
+        />
       </button>
     </div>
   );
