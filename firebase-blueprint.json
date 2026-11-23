@@ -1,0 +1,873 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Chair profile synchronized from Google Authentication.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "photoURL": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "displayName", "photoURL", "createdAt", "updatedAt"]
+    },
+    "Committee": {
+      "title": "Committee",
+      "description": "An MUN committee workspace owned by a chair.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "activeSessionId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "activeTab": {
+          "type": "string",
+          "enum": ["roll_call", "opening", "motions", "gsl", "mod", "unmod", "cow", "resolutions"]
+        },
+        "delegateCount": {
+          "type": "integer"
+        },
+        "sessionCount": {
+          "type": "integer"
+        },
+        "simpleMajorityFraction": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 20
+        },
+        "supermajorityFraction": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 20
+        },
+        "projectorKey": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "joinCode": {
+          "type": "string",
+          "minLength": 4,
+          "maxLength": 4,
+          "pattern": "^[A-Z0-9]{4}$"
+        },
+        "memberIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "ownerId",
+        "name",
+        "activeSessionId",
+        "activeTab",
+        "delegateCount",
+        "sessionCount",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "CommitteeInvite": {
+      "title": "CommitteeInvite",
+      "description": "4-character uppercase alphanumeric lookup record mapping a join code to a committee.",
+      "type": "object",
+      "properties": {
+        "committeeId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "committeeName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "ownerId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "joinCode": {
+          "type": "string",
+          "minLength": 4,
+          "maxLength": 4,
+          "pattern": "^[A-Z0-9]{4}$"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["committeeId", "committeeName", "ownerId", "joinCode", "createdAt", "updatedAt"]
+    },
+    "CommitteeInviteSecret": {
+      "title": "CommitteeInviteSecret",
+      "description": "Write-protected password hash lock checked server-side during co-chair join.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "committeeId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "joinCode": {
+          "type": "string",
+          "minLength": 4,
+          "maxLength": 4,
+          "pattern": "^[A-Z0-9]{4}$"
+        },
+        "passcodeHash": {
+          "type": "string",
+          "minLength": 64,
+          "maxLength": 64,
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["ownerId", "committeeId", "joinCode", "passcodeHash", "updatedAt"]
+    },
+    "CommitteeMember": {
+      "title": "CommitteeMember",
+      "description": "Co-chair membership and join proof record inside a committee.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "committeeId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ownerId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "joinCode": {
+          "type": "string",
+          "minLength": 4,
+          "maxLength": 4,
+          "pattern": "^[A-Z0-9]{4}$"
+        },
+        "passcodeProof": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "memberIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "joinedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "committeeId", "ownerId", "displayName", "joinCode", "passcodeProof", "memberIds", "joinedAt", "updatedAt"]
+    },
+    "CommitteeManifest": {
+      "title": "CommitteeManifest",
+      "description": "Document ID index used to synchronize co-chair membership across subcollections.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "memberIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "delegateIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "sessionIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "motionIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "logIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "blocIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["ownerId", "memberIds", "delegateIds", "sessionIds", "motionIds", "logIds", "blocIds", "updatedAt"]
+    },
+    "Delegate": {
+      "title": "Delegate",
+      "description": "Delegation tracked inside a committee.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "countryName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "countryCode": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 10
+        },
+        "speechesCount": {
+          "type": "integer"
+        },
+        "poisCount": {
+          "type": "integer"
+        },
+        "motionsProposedCount": {
+          "type": "integer"
+        },
+        "motionsAcceptedCount": {
+          "type": "integer"
+        },
+        "mainSubSpeechesCount": {
+          "type": "integer"
+        },
+        "amendmentsProposedCount": {
+          "type": "integer"
+        },
+        "amendmentsPassedCount": {
+          "type": "integer"
+        },
+        "amendmentSpeechesCount": {
+          "type": "integer"
+        },
+        "chairNotes": {
+          "type": "string",
+          "maxLength": 5000
+        },
+        "memberIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "ownerId",
+        "countryName",
+        "countryCode",
+        "speechesCount",
+        "poisCount",
+        "motionsProposedCount",
+        "motionsAcceptedCount",
+        "chairNotes",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Session": {
+      "title": "Session",
+      "description": "Committee session roll call ledger and quorum settings.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "order": {
+          "type": "integer"
+        },
+        "quorumRatio": {
+          "type": "number"
+        },
+        "attendance": {
+          "type": "object"
+        },
+        "memberIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "ownerId",
+        "name",
+        "order",
+        "quorumRatio",
+        "attendance",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Motion": {
+      "title": "Motion",
+      "description": "Procedural motion ranked by Thai MUN disruptiveness precedence.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "sessionId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "actionType": {
+          "type": "string",
+          "enum": ["gsl", "mod", "unmod", "cow", "other", "adjourn", "suspend", "extend", "introduce", "voting"]
+        },
+        "proposerId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "proposerName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "proposerCode": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 10
+        },
+        "totalSeconds": {
+          "type": "integer"
+        },
+        "speakerSeconds": {
+          "type": "integer"
+        },
+        "topic": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "disruptivenessScore": {
+          "type": "integer"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "accepted", "rejected"]
+        },
+        "memberIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "ownerId",
+        "sessionId",
+        "actionType",
+        "proposerId",
+        "proposerName",
+        "proposerCode",
+        "totalSeconds",
+        "speakerSeconds",
+        "topic",
+        "disruptivenessScore",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "ActivityLog": {
+      "title": "ActivityLog",
+      "description": "Chronological speech, POI, motion, or amendment record for a delegate.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "sessionId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "delegateId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "delegateName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "type": {
+          "type": "string",
+          "enum": ["speech", "poi", "motion", "amendment"]
+        },
+        "caucusMode": {
+          "type": "string",
+          "enum": ["Opening", "GSL", "Mod", "Unmod", "COW", "Motions", "Resolutions"]
+        },
+        "topic": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "durationSeconds": {
+          "type": "integer"
+        },
+        "targetDelegateName": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "yieldType": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "outcome": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "note": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "memberIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "ownerId",
+        "sessionId",
+        "delegateId",
+        "delegateName",
+        "type",
+        "caucusMode",
+        "topic",
+        "durationSeconds",
+        "targetDelegateName",
+        "yieldType",
+        "outcome",
+        "note",
+        "createdAt"
+      ]
+    },
+    "CaucusState": {
+      "title": "CaucusState",
+      "description": "Live debate timer, topic, and speaker queue state for GSL, Mod, Unmod, COW, or Resolutions.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "mode": {
+          "type": "string",
+          "enum": ["opening", "gsl", "mod", "unmod", "cow", "resolutions"]
+        },
+        "topic": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "totalSeconds": {
+          "type": "integer"
+        },
+        "speakerSeconds": {
+          "type": "integer"
+        },
+        "totalRemainingSeconds": {
+          "type": "integer"
+        },
+        "speakerRemainingSeconds": {
+          "type": "integer"
+        },
+        "timerRunning": {
+          "type": "boolean"
+        },
+        "timerUpdatedAtMs": {
+          "type": "number"
+        },
+        "currentSpeakerId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "yieldType": {
+          "type": "string",
+          "enum": ["none", "chair", "pois", "delegate", "comments"]
+        },
+        "yieldTargetId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "queue": {
+          "type": "array"
+        },
+        "slotsUsed": {
+          "type": "integer"
+        },
+        "subMode": {
+          "type": "string",
+          "enum": ["reading", "speech"]
+        },
+        "speechCategory": {
+          "type": "string",
+          "enum": [
+            "main_sub",
+            "for",
+            "against",
+            "to",
+            "amendment_for",
+            "amendment_against",
+            "amendment",
+            "general"
+          ]
+        },
+        "memberIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "ownerId",
+        "mode",
+        "topic",
+        "totalSeconds",
+        "speakerSeconds",
+        "totalRemainingSeconds",
+        "speakerRemainingSeconds",
+        "timerRunning",
+        "timerUpdatedAtMs",
+        "currentSpeakerId",
+        "yieldType",
+        "yieldTargetId",
+        "queue",
+        "slotsUsed",
+        "updatedAt"
+      ]
+    },
+    "UnmodBloc": {
+      "title": "UnmodBloc",
+      "description": "Working paper / bloc note captured during unmoderated caucus.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "sessionId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "sponsors": {
+          "type": "string",
+          "maxLength": 400
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "memberIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["ownerId", "sessionId", "title", "sponsors", "notes", "createdAt", "updatedAt"]
+    },
+    "ProjectorSnapshot": {
+      "title": "ProjectorSnapshot",
+      "description": "PII-free live stage telemetry mirrored for external synced projector links.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "committeeId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "committeeName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "sessionName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "activeTab": {
+          "type": "string",
+          "enum": ["roll_call", "opening", "motions", "gsl", "mod", "unmod", "cow", "resolutions"]
+        },
+        "modeDisplayLabel": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "topic": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "totalSeconds": { "type": "integer" },
+        "speakerSeconds": { "type": "integer" },
+        "totalRemainingSeconds": { "type": "integer" },
+        "speakerRemainingSeconds": { "type": "integer" },
+        "timerRunning": { "type": "boolean" },
+        "timerUpdatedAtMs": { "type": "number" },
+        "isResReading": { "type": "boolean" },
+        "currentSpeakerName": { "type": "string", "maxLength": 100 },
+        "currentSpeakerCode": { "type": "string", "maxLength": 10 },
+        "yieldType": {
+          "type": "string",
+          "enum": ["none", "chair", "pois", "delegate", "comments"]
+        },
+        "upcomingQueue": { "type": "array" },
+        "activeTotal": { "type": "integer" },
+        "totalDelegations": { "type": "integer" },
+        "pvCount": { "type": "integer" },
+        "quorumNeeded": { "type": "integer" },
+        "quorumMet": { "type": "boolean" },
+        "simpleMajority": { "type": "integer" },
+        "twoThirdsMajority": { "type": "integer" },
+        "simpleFractionLabel": { "type": "string", "minLength": 1, "maxLength": 20 },
+        "superFractionLabel": { "type": "string", "minLength": 1, "maxLength": 20 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "ownerId",
+        "committeeId",
+        "committeeName",
+        "sessionName",
+        "activeTab",
+        "modeDisplayLabel",
+        "topic",
+        "totalSeconds",
+        "speakerSeconds",
+        "totalRemainingSeconds",
+        "speakerRemainingSeconds",
+        "timerRunning",
+        "timerUpdatedAtMs",
+        "isResReading",
+        "currentSpeakerName",
+        "currentSpeakerCode",
+        "yieldType",
+        "upcomingQueue",
+        "activeTotal",
+        "totalDelegations",
+        "pvCount",
+        "quorumNeeded",
+        "quorumMet",
+        "simpleMajority",
+        "twoThirdsMajority",
+        "simpleFractionLabel",
+        "superFractionLabel",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Chair profile document owned strictly by the signed-in user."
+    },
+    "/committees/{committeeId}": {
+      "schema": { "$ref": "#/entities/Committee" },
+      "description": "Top-level committee record owned by the creating chair."
+    },
+    "/committees/{committeeId}/delegates/{delegateId}": {
+      "schema": { "$ref": "#/entities/Delegate" },
+      "description": "Delegations enrolled in the committee."
+    },
+    "/committees/{committeeId}/sessions/{sessionId}": {
+      "schema": { "$ref": "#/entities/Session" },
+      "description": "Committee sessions and roll call attendance maps."
+    },
+    "/committees/{committeeId}/motions/{motionId}": {
+      "schema": { "$ref": "#/entities/Motion" },
+      "description": "Motions proposed and ranked by disruptiveness."
+    },
+    "/committees/{committeeId}/logs/{logId}": {
+      "schema": { "$ref": "#/entities/ActivityLog" },
+      "description": "Chronological speech, POI, motion, and amendment logs per delegate."
+    },
+    "/committees/{committeeId}/caucuses/{caucusMode}": {
+      "schema": { "$ref": "#/entities/CaucusState" },
+      "description": "Live caucus state for gsl, mod, unmod, cow, or resolutions."
+    },
+    "/committees/{committeeId}/blocs/{blocId}": {
+      "schema": { "$ref": "#/entities/UnmodBloc" },
+      "description": "Bloc and working paper notes logged during unmoderated caucuses."
+    },
+    "/committees/{committeeId}/members/{memberId}": {
+      "schema": { "$ref": "#/entities/CommitteeMember" },
+      "description": "Verified co-chair membership records inside a committee."
+    },
+    "/committees/{committeeId}/meta/{metaId}": {
+      "schema": { "$ref": "#/entities/CommitteeManifest" },
+      "description": "Committee document ID manifest for atomic co-chair permission synchronization."
+    },
+    "/committeeInvites/{joinCode}": {
+      "schema": { "$ref": "#/entities/CommitteeInvite" },
+      "description": "4-character uppercase alphanumeric lookup record mapping a join code to a committee."
+    },
+    "/committeeInvites/{joinCode}/secrets/{secretId}": {
+      "schema": { "$ref": "#/entities/CommitteeInviteSecret" },
+      "description": "Write-protected password hash lock unreadable by non-owners."
+    },
+    "/projectors/{projectorId}": {
+      "schema": { "$ref": "#/entities/ProjectorSnapshot" },
+      "description": "PII-free live stage telemetry readable by capability ID for external projector displays."
+    }
+  }
+}

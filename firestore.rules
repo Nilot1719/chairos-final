@@ -1,0 +1,891 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global safety net: deny all reads and writes by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // -------------------------------------------------------------------------
+    // Global Primitives
+    // -------------------------------------------------------------------------
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidJoinCode(code) {
+      return code is string && code.size() == 4 && code.matches('^[A-Z0-9]{4}$');
+    }
+
+    function isValidSha256Hex(val) {
+      return val is string && val.size() == 64 && val.matches('^[a-f0-9]{64}$');
+    }
+
+    function isBoundedString(val, minLen, maxLen) {
+      return val is string && val.size() >= minLen && val.size() <= maxLen;
+    }
+
+    function isBoundedInt(val, minVal, maxVal) {
+      return val is int && val >= minVal && val <= maxVal;
+    }
+
+    function isValidCaucusQueue(q) {
+      return q is list && q.size() <= 250 && (q.size() == 0 || q[0] is string);
+    }
+
+    function isValidMemberList(members) {
+      return members is list && members.size() >= 1 && members.size() <= 25 && members[0] is string;
+    }
+
+    function isValidIdList(ids, maxLen) {
+      return ids is list && ids.size() <= maxLen && (ids.size() == 0 || ids[0] is string);
+    }
+
+    function isCommitteeMemberUid(data) {
+      return isSignedIn() && (
+        data.ownerId == request.auth.uid ||
+        ('memberIds' in data && data.memberIds is list && request.auth.uid in data.memberIds)
+      );
+    }
+
+    function isSubdocListAuthorized(data) {
+      return isSignedIn() && (
+        data.ownerId == request.auth.uid ||
+        ('memberIds' in data && data.memberIds is list && request.auth.uid in data.memberIds)
+      );
+    }
+
+    function isCommitteeOwner(committeeId) {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/committees/$(committeeId)) &&
+        get(/databases/$(database)/documents/committees/$(committeeId)).data.ownerId == request.auth.uid;
+    }
+
+    function isCommitteeMember(committeeId) {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/committees/$(committeeId)) &&
+        isCommitteeMemberUid(get(/databases/$(database)/documents/committees/$(committeeId)).data);
+    }
+
+    function isCommitteeMemberAfter(committeeId) {
+      return isSignedIn() &&
+        existsAfter(/databases/$(database)/documents/committees/$(committeeId)) &&
+        isCommitteeMemberUid(getAfter(/databases/$(database)/documents/committees/$(committeeId)).data);
+    }
+
+    function isValidIncomingSubdocMembers(data, committeeId) {
+      return !('memberIds' in data) || (
+        isValidMemberList(data.memberIds) &&
+        request.auth.uid in data.memberIds &&
+        data.memberIds == getAfter(/databases/$(database)/documents/committees/$(committeeId)).data.memberIds
+      );
+    }
+
+    function isValidMemberSyncUpdate(committeeId) {
+      return isValidMemberList(incoming().memberIds) && (
+        (
+          exists(/databases/$(database)/documents/committees/$(committeeId)) &&
+          incoming().memberIds == get(/databases/$(database)/documents/committees/$(committeeId)).data.memberIds
+        ) ||
+        (
+          'memberIds' in existing() &&
+          existing().memberIds is list &&
+          request.auth.uid in existing().memberIds &&
+          !(request.auth.uid in incoming().memberIds) &&
+          existing().memberIds.hasAll(incoming().memberIds) &&
+          incoming().memberIds.size() == existing().memberIds.size() - 1
+        )
+      );
+    }
+
+    // -------------------------------------------------------------------------
+    // Validation Blueprints
+    // -------------------------------------------------------------------------
+    function isValidUserProfile(data, userId) {
+      return data.keys().hasAll(['uid', 'displayName', 'photoURL', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['uid', 'displayName', 'photoURL', 'createdAt', 'updatedAt']) &&
+        isValidId(data.uid) &&
+        data.uid == userId &&
+        data.uid == request.auth.uid &&
+        isBoundedString(data.displayName, 1, 120) &&
+        isBoundedString(data.photoURL, 0, 500) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidCommittee(data) {
+      return data.keys().hasAll(['ownerId', 'name', 'activeSessionId', 'activeTab', 'delegateCount', 'sessionCount', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly([
+          'ownerId', 'name', 'activeSessionId', 'activeTab', 'delegateCount', 'sessionCount',
+          'simpleMajorityFraction', 'supermajorityFraction', 'projectorKey', 'joinCode', 'memberIds',
+          'createdAt', 'updatedAt'
+        ]) &&
+        isValidId(data.ownerId) &&
+        isBoundedString(data.name, 1, 120) &&
+        isValidId(data.activeSessionId) &&
+        data.activeTab in ['roll_call', 'opening', 'motions', 'gsl', 'mod', 'unmod', 'cow', 'resolutions'] &&
+        isBoundedInt(data.delegateCount, 0, 500) &&
+        isBoundedInt(data.sessionCount, 1, 100) &&
+        (!('simpleMajorityFraction' in data) || isBoundedString(data.simpleMajorityFraction, 1, 20)) &&
+        (!('supermajorityFraction' in data) || isBoundedString(data.supermajorityFraction, 1, 20)) &&
+        (!('projectorKey' in data) || isValidId(data.projectorKey)) &&
+        (!('joinCode' in data) || isValidJoinCode(data.joinCode)) &&
+        (!('memberIds' in data) || (isValidMemberList(data.memberIds) && data.ownerId in data.memberIds)) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidCommitteeInvite(data, joinCode) {
+      return data.keys().hasAll(['committeeId', 'committeeName', 'ownerId', 'joinCode', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['committeeId', 'committeeName', 'ownerId', 'joinCode', 'createdAt', 'updatedAt']) &&
+        isValidId(data.committeeId) &&
+        isBoundedString(data.committeeName, 1, 120) &&
+        isValidId(data.ownerId) &&
+        isValidJoinCode(data.joinCode) &&
+        data.joinCode == joinCode &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidCommitteeInviteSecret(data, joinCode) {
+      return data.keys().hasAll(['ownerId', 'committeeId', 'joinCode', 'passcodeHash', 'updatedAt']) &&
+        data.keys().hasOnly(['ownerId', 'committeeId', 'joinCode', 'passcodeHash', 'updatedAt']) &&
+        isValidId(data.ownerId) &&
+        isValidId(data.committeeId) &&
+        isValidJoinCode(data.joinCode) &&
+        data.joinCode == joinCode &&
+        isValidSha256Hex(data.passcodeHash) &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidCommitteeMember(data, committeeId, memberId) {
+      return data.keys().hasAll(['uid', 'committeeId', 'ownerId', 'displayName', 'joinCode', 'passcodeProof', 'memberIds', 'joinedAt', 'updatedAt']) &&
+        data.keys().hasOnly(['uid', 'committeeId', 'ownerId', 'displayName', 'joinCode', 'passcodeProof', 'memberIds', 'joinedAt', 'updatedAt']) &&
+        isValidId(data.uid) &&
+        data.uid == memberId &&
+        isValidId(data.committeeId) &&
+        data.committeeId == committeeId &&
+        isValidId(data.ownerId) &&
+        isBoundedString(data.displayName, 1, 120) &&
+        isValidJoinCode(data.joinCode) &&
+        isBoundedString(data.passcodeProof, 0, 64) &&
+        isValidMemberList(data.memberIds) &&
+        data.ownerId in data.memberIds &&
+        data.uid in data.memberIds &&
+        data.joinedAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidCommitteeManifest(data) {
+      return data.keys().hasAll(['ownerId', 'memberIds', 'delegateIds', 'sessionIds', 'motionIds', 'logIds', 'blocIds', 'updatedAt']) &&
+        data.keys().hasOnly(['ownerId', 'memberIds', 'delegateIds', 'sessionIds', 'motionIds', 'logIds', 'blocIds', 'updatedAt']) &&
+        isValidId(data.ownerId) &&
+        isValidMemberList(data.memberIds) &&
+        data.ownerId in data.memberIds &&
+        isValidIdList(data.delegateIds, 500) &&
+        isValidIdList(data.sessionIds, 100) &&
+        isValidIdList(data.motionIds, 500) &&
+        isValidIdList(data.logIds, 5000) &&
+        isValidIdList(data.blocIds, 500) &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidDelegate(data) {
+      return data.keys().hasAll(['ownerId', 'countryName', 'countryCode', 'speechesCount', 'poisCount', 'motionsProposedCount', 'motionsAcceptedCount', 'chairNotes', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly([
+          'ownerId', 'countryName', 'countryCode', 'speechesCount', 'poisCount', 'motionsProposedCount',
+          'motionsAcceptedCount', 'mainSubSpeechesCount', 'amendmentsProposedCount', 'amendmentsPassedCount',
+          'amendmentSpeechesCount', 'chairNotes', 'memberIds', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidId(data.ownerId) &&
+        isBoundedString(data.countryName, 1, 100) &&
+        isBoundedString(data.countryCode, 2, 10) &&
+        isBoundedInt(data.speechesCount, 0, 10000) &&
+        isBoundedInt(data.poisCount, 0, 10000) &&
+        isBoundedInt(data.motionsProposedCount, 0, 10000) &&
+        isBoundedInt(data.motionsAcceptedCount, 0, 10000) &&
+        (!('mainSubSpeechesCount' in data) || isBoundedInt(data.mainSubSpeechesCount, 0, 10000)) &&
+        (!('amendmentsProposedCount' in data) || isBoundedInt(data.amendmentsProposedCount, 0, 10000)) &&
+        (!('amendmentsPassedCount' in data) || isBoundedInt(data.amendmentsPassedCount, 0, 10000)) &&
+        (!('amendmentSpeechesCount' in data) || isBoundedInt(data.amendmentSpeechesCount, 0, 10000)) &&
+        isBoundedString(data.chairNotes, 0, 5000) &&
+        (!('memberIds' in data) || isValidMemberList(data.memberIds)) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidSession(data) {
+      return data.keys().hasAll(['ownerId', 'name', 'order', 'quorumRatio', 'attendance', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['ownerId', 'name', 'order', 'quorumRatio', 'attendance', 'memberIds', 'createdAt', 'updatedAt']) &&
+        isValidId(data.ownerId) &&
+        isBoundedString(data.name, 1, 80) &&
+        isBoundedInt(data.order, 1, 100) &&
+        (data.quorumRatio is float || data.quorumRatio is int) &&
+        (data.quorumRatio == 0.5 || data.quorumRatio == 0.333) &&
+        data.attendance is map &&
+        data.attendance.keys().size() <= 300 &&
+        (!('memberIds' in data) || isValidMemberList(data.memberIds)) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidMotion(data) {
+      return data.keys().hasAll(['ownerId', 'sessionId', 'actionType', 'proposerId', 'proposerName', 'proposerCode', 'totalSeconds', 'speakerSeconds', 'topic', 'disruptivenessScore', 'status', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['ownerId', 'sessionId', 'actionType', 'proposerId', 'proposerName', 'proposerCode', 'totalSeconds', 'speakerSeconds', 'topic', 'disruptivenessScore', 'status', 'memberIds', 'createdAt', 'updatedAt']) &&
+        isValidId(data.ownerId) &&
+        isValidId(data.sessionId) &&
+        data.actionType in ['gsl', 'mod', 'unmod', 'cow', 'other', 'adjourn', 'suspend', 'extend', 'introduce', 'voting'] &&
+        isValidId(data.proposerId) &&
+        isBoundedString(data.proposerName, 1, 100) &&
+        isBoundedString(data.proposerCode, 2, 10) &&
+        isBoundedInt(data.totalSeconds, 0, 7200) &&
+        isBoundedInt(data.speakerSeconds, 0, 600) &&
+        isBoundedString(data.topic, 0, 200) &&
+        isBoundedInt(data.disruptivenessScore, 0, 100000) &&
+        data.status in ['pending', 'accepted', 'rejected'] &&
+        (!('memberIds' in data) || isValidMemberList(data.memberIds)) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidActivityLog(data) {
+      return data.keys().hasAll(['ownerId', 'sessionId', 'delegateId', 'delegateName', 'type', 'caucusMode', 'topic', 'durationSeconds', 'targetDelegateName', 'yieldType', 'outcome', 'note', 'createdAt']) &&
+        data.keys().hasOnly(['ownerId', 'sessionId', 'delegateId', 'delegateName', 'type', 'caucusMode', 'topic', 'durationSeconds', 'targetDelegateName', 'yieldType', 'outcome', 'note', 'memberIds', 'createdAt']) &&
+        isValidId(data.ownerId) &&
+        isValidId(data.sessionId) &&
+        isValidId(data.delegateId) &&
+        isBoundedString(data.delegateName, 1, 100) &&
+        data.type in ['speech', 'poi', 'motion', 'amendment'] &&
+        data.caucusMode in ['Opening', 'GSL', 'Mod', 'Unmod', 'COW', 'Motions', 'Resolutions'] &&
+        isBoundedString(data.topic, 0, 200) &&
+        isBoundedInt(data.durationSeconds, 0, 7200) &&
+        isBoundedString(data.targetDelegateName, 0, 100) &&
+        isBoundedString(data.yieldType, 0, 40) &&
+        isBoundedString(data.outcome, 0, 40) &&
+        isBoundedString(data.note, 0, 500) &&
+        (!('memberIds' in data) || isValidMemberList(data.memberIds)) &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidCaucusState(data, modeId) {
+      return data.keys().hasAll(['ownerId', 'mode', 'topic', 'totalSeconds', 'speakerSeconds', 'totalRemainingSeconds', 'speakerRemainingSeconds', 'timerRunning', 'timerUpdatedAtMs', 'currentSpeakerId', 'yieldType', 'yieldTargetId', 'queue', 'slotsUsed', 'updatedAt']) &&
+        data.keys().hasOnly(['ownerId', 'mode', 'topic', 'totalSeconds', 'speakerSeconds', 'totalRemainingSeconds', 'speakerRemainingSeconds', 'timerRunning', 'timerUpdatedAtMs', 'currentSpeakerId', 'yieldType', 'yieldTargetId', 'queue', 'slotsUsed', 'subMode', 'speechCategory', 'memberIds', 'updatedAt']) &&
+        isValidId(data.ownerId) &&
+        data.mode in ['opening', 'gsl', 'mod', 'unmod', 'cow', 'resolutions'] &&
+        data.mode == modeId &&
+        isBoundedString(data.topic, 0, 200) &&
+        isBoundedInt(data.totalSeconds, 0, 7200) &&
+        isBoundedInt(data.speakerSeconds, 0, 600) &&
+        isBoundedInt(data.totalRemainingSeconds, 0, 7200) &&
+        isBoundedInt(data.speakerRemainingSeconds, 0, 600) &&
+        data.timerRunning is bool &&
+        (data.timerUpdatedAtMs is int || data.timerUpdatedAtMs is float) &&
+        data.timerUpdatedAtMs >= 0 &&
+        isBoundedString(data.currentSpeakerId, 0, 128) &&
+        data.yieldType in ['none', 'chair', 'pois', 'delegate', 'comments'] &&
+        isBoundedString(data.yieldTargetId, 0, 128) &&
+        isValidCaucusQueue(data.queue) &&
+        isBoundedInt(data.slotsUsed, 0, 500) &&
+        (!('subMode' in data) || data.subMode in ['reading', 'speech']) &&
+        (!('speechCategory' in data) || data.speechCategory in ['main_sub', 'for', 'against', 'to', 'amendment_for', 'amendment_against', 'amendment', 'general']) &&
+        (!('memberIds' in data) || isValidMemberList(data.memberIds)) &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidUnmodBloc(data) {
+      return data.keys().hasAll(['ownerId', 'sessionId', 'title', 'sponsors', 'notes', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['ownerId', 'sessionId', 'title', 'sponsors', 'notes', 'memberIds', 'createdAt', 'updatedAt']) &&
+        isValidId(data.ownerId) &&
+        isValidId(data.sessionId) &&
+        isBoundedString(data.title, 1, 120) &&
+        isBoundedString(data.sponsors, 0, 400) &&
+        isBoundedString(data.notes, 0, 2000) &&
+        (!('memberIds' in data) || isValidMemberList(data.memberIds)) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidProjectorQueue(q) {
+      return q is list && q.size() <= 10 && (q.size() == 0 || q[0] is string);
+    }
+
+    function isValidProjectorSnapshot(data) {
+      return data.keys().hasAll([
+          'ownerId', 'committeeId', 'committeeName', 'sessionName', 'activeTab', 'modeDisplayLabel',
+          'topic', 'totalSeconds', 'speakerSeconds', 'totalRemainingSeconds', 'speakerRemainingSeconds',
+          'timerRunning', 'timerUpdatedAtMs', 'isResReading', 'currentSpeakerName', 'currentSpeakerCode',
+          'yieldType', 'upcomingQueue', 'activeTotal', 'totalDelegations', 'pvCount', 'quorumNeeded',
+          'quorumMet', 'simpleMajority', 'twoThirdsMajority', 'simpleFractionLabel', 'superFractionLabel',
+          'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'ownerId', 'committeeId', 'committeeName', 'sessionName', 'activeTab', 'modeDisplayLabel',
+          'topic', 'totalSeconds', 'speakerSeconds', 'totalRemainingSeconds', 'speakerRemainingSeconds',
+          'timerRunning', 'timerUpdatedAtMs', 'isResReading', 'currentSpeakerName', 'currentSpeakerCode',
+          'yieldType', 'upcomingQueue', 'activeTotal', 'totalDelegations', 'pvCount', 'quorumNeeded',
+          'quorumMet', 'simpleMajority', 'twoThirdsMajority', 'simpleFractionLabel', 'superFractionLabel',
+          'createdAt', 'updatedAt'
+        ]) &&
+        isValidId(data.ownerId) &&
+        isValidId(data.committeeId) &&
+        isBoundedString(data.committeeName, 1, 120) &&
+        isBoundedString(data.sessionName, 1, 80) &&
+        data.activeTab in ['roll_call', 'opening', 'motions', 'gsl', 'mod', 'unmod', 'cow', 'resolutions'] &&
+        isBoundedString(data.modeDisplayLabel, 1, 80) &&
+        isBoundedString(data.topic, 0, 200) &&
+        isBoundedInt(data.totalSeconds, 0, 7200) &&
+        isBoundedInt(data.speakerSeconds, 0, 600) &&
+        isBoundedInt(data.totalRemainingSeconds, 0, 7200) &&
+        isBoundedInt(data.speakerRemainingSeconds, 0, 600) &&
+        data.timerRunning is bool &&
+        (data.timerUpdatedAtMs is int || data.timerUpdatedAtMs is float) &&
+        data.timerUpdatedAtMs >= 0 &&
+        data.isResReading is bool &&
+        isBoundedString(data.currentSpeakerName, 0, 100) &&
+        isBoundedString(data.currentSpeakerCode, 0, 10) &&
+        data.yieldType in ['none', 'chair', 'pois', 'delegate', 'comments'] &&
+        isValidProjectorQueue(data.upcomingQueue) &&
+        isBoundedInt(data.activeTotal, 0, 500) &&
+        isBoundedInt(data.totalDelegations, 0, 500) &&
+        isBoundedInt(data.pvCount, 0, 500) &&
+        isBoundedInt(data.quorumNeeded, 0, 500) &&
+        data.quorumMet is bool &&
+        isBoundedInt(data.simpleMajority, 0, 500) &&
+        isBoundedInt(data.twoThirdsMajority, 0, 500) &&
+        isBoundedString(data.simpleFractionLabel, 1, 20) &&
+        isBoundedString(data.superFractionLabel, 1, 20) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    // -------------------------------------------------------------------------
+    // Collection Rules
+    // -------------------------------------------------------------------------
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && userId == request.auth.uid;
+      allow list: if false;
+      allow create: if isSignedIn() &&
+        isValidId(userId) &&
+        userId == request.auth.uid &&
+        isValidUserProfile(incoming(), userId) &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isSignedIn() &&
+        isValidId(userId) &&
+        userId == request.auth.uid &&
+        isValidUserProfile(incoming(), userId) &&
+        incoming().uid == existing().uid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'updatedAt']);
+      allow delete: if false;
+    }
+
+    match /committeeInvites/{joinCode} {
+      allow get: if isSignedIn() && isValidJoinCode(joinCode);
+      allow list: if false;
+      allow create: if isSignedIn() &&
+        isValidJoinCode(joinCode) &&
+        isValidCommitteeInvite(incoming(), joinCode) &&
+        incoming().ownerId == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        existsAfter(/databases/$(database)/documents/committees/$(incoming().committeeId)) &&
+        getAfter(/databases/$(database)/documents/committees/$(incoming().committeeId)).data.ownerId == request.auth.uid;
+      allow update: if isSignedIn() &&
+        isValidJoinCode(joinCode) &&
+        isValidCommitteeInvite(incoming(), joinCode) &&
+        existing().ownerId == request.auth.uid &&
+        incoming().ownerId == existing().ownerId &&
+        incoming().committeeId == existing().committeeId &&
+        incoming().joinCode == existing().joinCode &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['committeeName', 'updatedAt']);
+      allow delete: if isSignedIn() &&
+        isValidJoinCode(joinCode) &&
+        existing().ownerId == request.auth.uid;
+
+      match /secrets/{secretId} {
+        allow get: if isSignedIn() &&
+          isValidJoinCode(joinCode) &&
+          secretId == 'lock' &&
+          existing().ownerId == request.auth.uid;
+        allow list: if false;
+        allow create: if isSignedIn() &&
+          isValidJoinCode(joinCode) &&
+          secretId == 'lock' &&
+          isValidCommitteeInviteSecret(incoming(), joinCode) &&
+          incoming().ownerId == request.auth.uid &&
+          incoming().updatedAt == request.time &&
+          existsAfter(/databases/$(database)/documents/committeeInvites/$(joinCode)) &&
+          getAfter(/databases/$(database)/documents/committeeInvites/$(joinCode)).data.ownerId == request.auth.uid;
+        allow update: if isSignedIn() &&
+          isValidJoinCode(joinCode) &&
+          secretId == 'lock' &&
+          isValidCommitteeInviteSecret(incoming(), joinCode) &&
+          existing().ownerId == request.auth.uid &&
+          incoming().ownerId == existing().ownerId &&
+          incoming().committeeId == existing().committeeId &&
+          incoming().joinCode == existing().joinCode &&
+          incoming().updatedAt == request.time &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['passcodeHash', 'updatedAt']);
+        allow delete: if isSignedIn() &&
+          isValidJoinCode(joinCode) &&
+          secretId == 'lock' &&
+          existing().ownerId == request.auth.uid;
+      }
+    }
+
+    match /committees/{committeeId} {
+      allow get: if isSignedIn() && isValidId(committeeId) && isCommitteeMemberUid(existing());
+      allow list: if isCommitteeMemberUid(existing());
+      allow create: if isSignedIn() &&
+        isValidId(committeeId) &&
+        isValidCommittee(incoming()) &&
+        incoming().ownerId == request.auth.uid &&
+        incoming().memberIds is list &&
+        incoming().memberIds.size() == 1 &&
+        incoming().memberIds[0] == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isSignedIn() &&
+        isValidId(committeeId) &&
+        isValidCommittee(incoming()) &&
+        incoming().ownerId == existing().ownerId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (
+          (
+            isCommitteeMemberUid(existing()) &&
+            (
+              incoming().diff(existing()).affectedKeys().hasOnly(['activeTab', 'updatedAt']) ||
+              incoming().diff(existing()).affectedKeys().hasOnly(['activeSessionId', 'updatedAt']) ||
+              incoming().diff(existing()).affectedKeys().hasOnly(['activeSessionId', 'sessionCount', 'updatedAt']) ||
+              incoming().diff(existing()).affectedKeys().hasOnly(['delegateCount', 'updatedAt']) ||
+              incoming().diff(existing()).affectedKeys().hasOnly(['simpleMajorityFraction', 'updatedAt']) ||
+              incoming().diff(existing()).affectedKeys().hasOnly(['supermajorityFraction', 'updatedAt']) ||
+              incoming().diff(existing()).affectedKeys().hasOnly(['simpleMajorityFraction', 'supermajorityFraction', 'updatedAt']) ||
+              incoming().diff(existing()).affectedKeys().hasOnly(['projectorKey', 'updatedAt'])
+            )
+          ) ||
+          (
+            existing().ownerId == request.auth.uid &&
+            (
+              incoming().diff(existing()).affectedKeys().hasOnly(['name', 'updatedAt']) ||
+              incoming().diff(existing()).affectedKeys().hasOnly(['name', 'delegateCount', 'updatedAt']) ||
+              incoming().diff(existing()).affectedKeys().hasOnly(['joinCode', 'updatedAt']) ||
+              (
+                !('memberIds' in existing()) &&
+                incoming().memberIds == [request.auth.uid] &&
+                (
+                  incoming().diff(existing()).affectedKeys().hasOnly(['memberIds', 'updatedAt']) ||
+                  incoming().diff(existing()).affectedKeys().hasOnly(['joinCode', 'memberIds', 'updatedAt'])
+                )
+              ) ||
+              (
+                'memberIds' in existing() &&
+                incoming().diff(existing()).affectedKeys().hasOnly(['memberIds', 'updatedAt']) &&
+                existing().ownerId in incoming().memberIds &&
+                existing().memberIds.hasAll(incoming().memberIds) &&
+                incoming().memberIds.size() == existing().memberIds.size() - 1
+              )
+            )
+          ) ||
+          (
+            'memberIds' in existing() &&
+            existing().memberIds is list &&
+            !(request.auth.uid in existing().memberIds) &&
+            request.auth.uid in incoming().memberIds &&
+            incoming().memberIds.size() <= 25 &&
+            incoming().memberIds.hasAll(existing().memberIds) &&
+            incoming().memberIds.size() == existing().memberIds.size() + 1 &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['memberIds', 'updatedAt']) &&
+            existsAfter(/databases/$(database)/documents/committees/$(committeeId)/members/$(request.auth.uid))
+          ) ||
+          (
+            existing().ownerId != request.auth.uid &&
+            'memberIds' in existing() &&
+            existing().memberIds is list &&
+            request.auth.uid in existing().memberIds &&
+            !(request.auth.uid in incoming().memberIds) &&
+            existing().ownerId in incoming().memberIds &&
+            existing().memberIds.hasAll(incoming().memberIds) &&
+            incoming().memberIds.size() == existing().memberIds.size() - 1 &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['memberIds', 'updatedAt'])
+          )
+        );
+      allow delete: if isSignedIn() && isValidId(committeeId) && existing().ownerId == request.auth.uid;
+
+      match /members/{memberId} {
+        allow get: if isSignedIn() && isValidId(committeeId) && isValidId(memberId) && isCommitteeMember(committeeId);
+        allow list: if isSubdocListAuthorized(existing());
+        allow create: if isSignedIn() &&
+          isValidId(committeeId) &&
+          isValidId(memberId) &&
+          memberId == request.auth.uid &&
+          isValidCommitteeMember(incoming(), committeeId, memberId) &&
+          incoming().joinedAt == request.time &&
+          incoming().updatedAt == request.time &&
+          (
+            (
+              existsAfter(/databases/$(database)/documents/committees/$(committeeId)) &&
+              getAfter(/databases/$(database)/documents/committees/$(committeeId)).data.ownerId == request.auth.uid &&
+              incoming().ownerId == request.auth.uid
+            ) ||
+            (
+              isValidJoinCode(incoming().joinCode) &&
+              exists(/databases/$(database)/documents/committeeInvites/$(incoming().joinCode)) &&
+              get(/databases/$(database)/documents/committeeInvites/$(incoming().joinCode)).data.committeeId == committeeId &&
+              incoming().ownerId == get(/databases/$(database)/documents/committeeInvites/$(incoming().joinCode)).data.ownerId &&
+              exists(/databases/$(database)/documents/committeeInvites/$(incoming().joinCode)/secrets/lock) &&
+              incoming().passcodeProof == get(/databases/$(database)/documents/committeeInvites/$(incoming().joinCode)/secrets/lock).data.passcodeHash &&
+              existsAfter(/databases/$(database)/documents/committees/$(committeeId)) &&
+              request.auth.uid in getAfter(/databases/$(database)/documents/committees/$(committeeId)).data.memberIds
+            )
+          );
+        allow update: if isSignedIn() &&
+          isValidId(committeeId) &&
+          isValidId(memberId) &&
+          isValidCommitteeMember(incoming(), committeeId, memberId) &&
+          isCommitteeMember(committeeId) &&
+          incoming().ownerId == existing().ownerId &&
+          incoming().uid == existing().uid &&
+          incoming().committeeId == existing().committeeId &&
+          incoming().joinedAt == existing().joinedAt &&
+          incoming().updatedAt == request.time &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['memberIds', 'updatedAt']) &&
+          isValidMemberSyncUpdate(committeeId);
+        allow delete: if isSignedIn() &&
+          isValidId(committeeId) &&
+          isValidId(memberId) &&
+          (existing().uid == request.auth.uid || existing().ownerId == request.auth.uid || isCommitteeOwner(committeeId));
+      }
+
+      match /meta/{metaId} {
+        allow get: if isSignedIn() &&
+          isValidId(committeeId) &&
+          metaId == 'manifest' &&
+          isCommitteeMember(committeeId);
+        allow list: if false;
+        allow create: if isSignedIn() &&
+          isValidId(committeeId) &&
+          metaId == 'manifest' &&
+          isValidCommitteeManifest(incoming()) &&
+          incoming().ownerId == request.auth.uid &&
+          incoming().updatedAt == request.time &&
+          existsAfter(/databases/$(database)/documents/committees/$(committeeId)) &&
+          getAfter(/databases/$(database)/documents/committees/$(committeeId)).data.ownerId == request.auth.uid;
+        allow update: if isSignedIn() &&
+          isValidId(committeeId) &&
+          metaId == 'manifest' &&
+          isValidCommitteeManifest(incoming()) &&
+          isCommitteeMember(committeeId) &&
+          incoming().ownerId == existing().ownerId &&
+          incoming().updatedAt == request.time &&
+          (
+            incoming().diff(existing()).affectedKeys().hasOnly(['delegateIds', 'updatedAt']) ||
+            incoming().diff(existing()).affectedKeys().hasOnly(['sessionIds', 'updatedAt']) ||
+            incoming().diff(existing()).affectedKeys().hasOnly(['motionIds', 'updatedAt']) ||
+            incoming().diff(existing()).affectedKeys().hasOnly(['logIds', 'updatedAt']) ||
+            incoming().diff(existing()).affectedKeys().hasOnly(['blocIds', 'updatedAt']) ||
+            (
+              incoming().diff(existing()).affectedKeys().hasOnly(['memberIds', 'updatedAt']) &&
+              isValidMemberSyncUpdate(committeeId)
+            )
+          );
+        allow delete: if isSignedIn() &&
+          isValidId(committeeId) &&
+          metaId == 'manifest' &&
+          (existing().ownerId == request.auth.uid || isCommitteeOwner(committeeId));
+      }
+
+      match /delegates/{delegateId} {
+        allow get: if isSignedIn() && isValidId(committeeId) && isValidId(delegateId) && isCommitteeMember(committeeId);
+        allow list: if isSubdocListAuthorized(existing());
+        allow create: if isSignedIn() &&
+          isValidId(committeeId) &&
+          isValidId(delegateId) &&
+          isValidDelegate(incoming()) &&
+          incoming().ownerId == request.auth.uid &&
+          incoming().createdAt == request.time &&
+          incoming().updatedAt == request.time &&
+          isCommitteeMemberAfter(committeeId) &&
+          isValidIncomingSubdocMembers(incoming(), committeeId);
+        allow update: if isValidId(committeeId) &&
+          isValidId(delegateId) &&
+          isSignedIn() &&
+          isValidDelegate(incoming()) &&
+          isCommitteeMember(committeeId) &&
+          incoming().ownerId == existing().ownerId &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().updatedAt == request.time &&
+          (
+            incoming().diff(existing()).affectedKeys().hasOnly(['chairNotes', 'updatedAt']) ||
+            incoming().diff(existing()).affectedKeys().hasOnly(['speechesCount', 'updatedAt']) ||
+            incoming().diff(existing()).affectedKeys().hasOnly(['poisCount', 'updatedAt']) ||
+            incoming().diff(existing()).affectedKeys().hasOnly(['motionsProposedCount', 'updatedAt']) ||
+            incoming().diff(existing()).affectedKeys().hasOnly(['motionsAcceptedCount', 'updatedAt']) ||
+            incoming().diff(existing()).affectedKeys().hasOnly(['motionsProposedCount', 'motionsAcceptedCount', 'updatedAt']) ||
+            incoming().diff(existing()).affectedKeys().hasOnly(['mainSubSpeechesCount', 'updatedAt']) ||
+            incoming().diff(existing()).affectedKeys().hasOnly(['speechesCount', 'mainSubSpeechesCount', 'updatedAt']) ||
+            incoming().diff(existing()).affectedKeys().hasOnly(['amendmentSpeechesCount', 'updatedAt']) ||
+            incoming().diff(existing()).affectedKeys().hasOnly(['speechesCount', 'amendmentSpeechesCount', 'updatedAt']) ||
+            incoming().diff(existing()).affectedKeys().hasOnly(['amendmentsProposedCount', 'updatedAt']) ||
+            incoming().diff(existing()).affectedKeys().hasOnly(['amendmentsProposedCount', 'amendmentsPassedCount', 'updatedAt']) ||
+            incoming().diff(existing()).affectedKeys().hasOnly(['countryName', 'countryCode', 'updatedAt']) ||
+            (
+              incoming().diff(existing()).affectedKeys().hasOnly(['memberIds', 'updatedAt']) &&
+              isValidMemberSyncUpdate(committeeId)
+            ) ||
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'speechesCount',
+              'poisCount',
+              'motionsProposedCount',
+              'motionsAcceptedCount',
+              'mainSubSpeechesCount',
+              'amendmentsProposedCount',
+              'amendmentsPassedCount',
+              'amendmentSpeechesCount',
+              'updatedAt'
+            ])
+          );
+        allow delete: if isSignedIn() && isValidId(committeeId) && isValidId(delegateId) && isCommitteeMember(committeeId);
+      }
+
+      match /sessions/{sessionId} {
+        allow get: if isSignedIn() && isValidId(committeeId) && isValidId(sessionId) && isCommitteeMember(committeeId);
+        allow list: if isSubdocListAuthorized(existing());
+        allow create: if isSignedIn() &&
+          isValidId(committeeId) &&
+          isValidId(sessionId) &&
+          isValidSession(incoming()) &&
+          incoming().ownerId == request.auth.uid &&
+          incoming().createdAt == request.time &&
+          incoming().updatedAt == request.time &&
+          isCommitteeMemberAfter(committeeId) &&
+          isValidIncomingSubdocMembers(incoming(), committeeId);
+        allow update: if isSignedIn() &&
+          isValidId(committeeId) &&
+          isValidId(sessionId) &&
+          isValidSession(incoming()) &&
+          isCommitteeMember(committeeId) &&
+          incoming().ownerId == existing().ownerId &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().updatedAt == request.time &&
+          (
+            incoming().diff(existing()).affectedKeys().hasOnly(['attendance', 'updatedAt']) ||
+            incoming().diff(existing()).affectedKeys().hasOnly(['quorumRatio', 'updatedAt']) ||
+            incoming().diff(existing()).affectedKeys().hasOnly(['name', 'updatedAt']) ||
+            (
+              incoming().diff(existing()).affectedKeys().hasOnly(['memberIds', 'updatedAt']) &&
+              isValidMemberSyncUpdate(committeeId)
+            )
+          );
+        allow delete: if isSignedIn() && isValidId(committeeId) && isValidId(sessionId) && isCommitteeMember(committeeId);
+      }
+
+      match /motions/{motionId} {
+        allow get: if isSignedIn() && isValidId(committeeId) && isValidId(motionId) && isCommitteeMember(committeeId);
+        allow list: if isSubdocListAuthorized(existing());
+        allow create: if isSignedIn() &&
+          isValidId(committeeId) &&
+          isValidId(motionId) &&
+          isValidMotion(incoming()) &&
+          incoming().ownerId == request.auth.uid &&
+          incoming().status == 'pending' &&
+          incoming().createdAt == request.time &&
+          incoming().updatedAt == request.time &&
+          isCommitteeMemberAfter(committeeId) &&
+          isValidIncomingSubdocMembers(incoming(), committeeId);
+        allow update: if isSignedIn() &&
+          isValidId(committeeId) &&
+          isValidId(motionId) &&
+          isValidMotion(incoming()) &&
+          isCommitteeMember(committeeId) &&
+          incoming().ownerId == existing().ownerId &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().updatedAt == request.time &&
+          (
+            (
+              existing().status == 'pending' &&
+              incoming().status in ['accepted', 'rejected'] &&
+              incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+            ) ||
+            (
+              incoming().diff(existing()).affectedKeys().hasOnly(['memberIds', 'updatedAt']) &&
+              isValidMemberSyncUpdate(committeeId)
+            )
+          );
+        allow delete: if isSignedIn() && isValidId(committeeId) && isValidId(motionId) && isCommitteeMember(committeeId);
+      }
+
+      match /logs/{logId} {
+        allow get: if isSignedIn() && isValidId(committeeId) && isValidId(logId) && isCommitteeMember(committeeId);
+        allow list: if isSubdocListAuthorized(existing());
+        allow create: if isSignedIn() &&
+          isValidId(committeeId) &&
+          isValidId(logId) &&
+          isValidActivityLog(incoming()) &&
+          incoming().ownerId == request.auth.uid &&
+          incoming().createdAt == request.time &&
+          isCommitteeMemberAfter(committeeId) &&
+          isValidIncomingSubdocMembers(incoming(), committeeId);
+        allow update: if isSignedIn() &&
+          isValidId(committeeId) &&
+          isValidId(logId) &&
+          isValidActivityLog(incoming()) &&
+          isCommitteeMember(committeeId) &&
+          incoming().ownerId == existing().ownerId &&
+          incoming().createdAt == existing().createdAt &&
+          (
+            incoming().diff(existing()).affectedKeys().hasOnly(['note']) ||
+            (
+              incoming().diff(existing()).affectedKeys().hasOnly(['memberIds']) &&
+              isValidMemberSyncUpdate(committeeId)
+            )
+          );
+        allow delete: if isSignedIn() && isValidId(committeeId) && isValidId(logId) && isCommitteeMember(committeeId);
+      }
+
+      match /caucuses/{caucusMode} {
+        allow get: if isSignedIn() && isValidId(committeeId) && isValidId(caucusMode) && isCommitteeMember(committeeId);
+        allow list: if isSubdocListAuthorized(existing());
+        allow create: if isSignedIn() &&
+          isValidId(committeeId) &&
+          isValidId(caucusMode) &&
+          isValidCaucusState(incoming(), caucusMode) &&
+          incoming().ownerId == request.auth.uid &&
+          incoming().updatedAt == request.time &&
+          isCommitteeMemberAfter(committeeId) &&
+          isValidIncomingSubdocMembers(incoming(), committeeId);
+        allow update: if isSignedIn() &&
+          isValidId(committeeId) &&
+          isValidId(caucusMode) &&
+          isValidCaucusState(incoming(), caucusMode) &&
+          isCommitteeMember(committeeId) &&
+          incoming().ownerId == existing().ownerId &&
+          incoming().mode == existing().mode &&
+          incoming().updatedAt == request.time &&
+          (
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'topic',
+              'totalSeconds',
+              'speakerSeconds',
+              'totalRemainingSeconds',
+              'speakerRemainingSeconds',
+              'timerRunning',
+              'timerUpdatedAtMs',
+              'currentSpeakerId',
+              'yieldType',
+              'yieldTargetId',
+              'queue',
+              'slotsUsed',
+              'subMode',
+              'speechCategory',
+              'updatedAt'
+            ]) ||
+            (
+              incoming().diff(existing()).affectedKeys().hasOnly(['memberIds', 'updatedAt']) &&
+              isValidMemberSyncUpdate(committeeId)
+            )
+          );
+        allow delete: if isSignedIn() && isValidId(committeeId) && isValidId(caucusMode) && isCommitteeMember(committeeId);
+      }
+
+      match /blocs/{blocId} {
+        allow get: if isSignedIn() && isValidId(committeeId) && isValidId(blocId) && isCommitteeMember(committeeId);
+        allow list: if isSubdocListAuthorized(existing());
+        allow create: if isSignedIn() &&
+          isValidId(committeeId) &&
+          isValidId(blocId) &&
+          isValidUnmodBloc(incoming()) &&
+          incoming().ownerId == request.auth.uid &&
+          incoming().createdAt == request.time &&
+          incoming().updatedAt == request.time &&
+          isCommitteeMemberAfter(committeeId) &&
+          isValidIncomingSubdocMembers(incoming(), committeeId);
+        allow update: if isSignedIn() &&
+          isValidId(committeeId) &&
+          isValidId(blocId) &&
+          isValidUnmodBloc(incoming()) &&
+          isCommitteeMember(committeeId) &&
+          incoming().ownerId == existing().ownerId &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().updatedAt == request.time &&
+          (
+            incoming().diff(existing()).affectedKeys().hasOnly(['title', 'sponsors', 'notes', 'updatedAt']) ||
+            (
+              incoming().diff(existing()).affectedKeys().hasOnly(['memberIds', 'updatedAt']) &&
+              isValidMemberSyncUpdate(committeeId)
+            )
+          );
+        allow delete: if isSignedIn() && isValidId(committeeId) && isValidId(blocId) && isCommitteeMember(committeeId);
+      }
+    }
+
+    match /projectors/{projectorId} {
+      allow get: if isValidId(projectorId);
+      allow list: if false;
+      allow create: if isSignedIn() &&
+        isValidId(projectorId) &&
+        isValidProjectorSnapshot(incoming()) &&
+        isCommitteeMember(incoming().committeeId) &&
+        incoming().ownerId == get(/databases/$(database)/documents/committees/$(incoming().committeeId)).data.ownerId &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isSignedIn() &&
+        isValidId(projectorId) &&
+        isValidProjectorSnapshot(incoming()) &&
+        isCommitteeMember(existing().committeeId) &&
+        incoming().ownerId == existing().ownerId &&
+        incoming().committeeId == existing().committeeId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'committeeName',
+          'sessionName',
+          'activeTab',
+          'modeDisplayLabel',
+          'topic',
+          'totalSeconds',
+          'speakerSeconds',
+          'totalRemainingSeconds',
+          'speakerRemainingSeconds',
+          'timerRunning',
+          'timerUpdatedAtMs',
+          'isResReading',
+          'currentSpeakerName',
+          'currentSpeakerCode',
+          'yieldType',
+          'upcomingQueue',
+          'activeTotal',
+          'totalDelegations',
+          'pvCount',
+          'quorumNeeded',
+          'quorumMet',
+          'simpleMajority',
+          'twoThirdsMajority',
+          'simpleFractionLabel',
+          'superFractionLabel',
+          'updatedAt'
+        ]);
+      allow delete: if isSignedIn() &&
+        isValidId(projectorId) &&
+        (existing().ownerId == request.auth.uid || isCommitteeOwner(existing().committeeId));
+    }
+  }
+}

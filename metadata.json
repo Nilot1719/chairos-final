@@ -1,0 +1,6 @@
+{
+  "name": "ChairOS",
+  "description": "The premier Model United Nations delegate-tracking and committee-chairing platform for the Thai MUN Circuit.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
