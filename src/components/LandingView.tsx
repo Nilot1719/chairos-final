@@ -20,12 +20,6 @@ export function LandingView({ onSignIn, onEnterGuest, loading, error }: LandingV
               ChairOS
             </span>
           </div>
-          <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-slate-600">
-            <span className="whitespace-nowrap">Roll Call</span>
-            <span className="whitespace-nowrap">Motions</span>
-            <span className="whitespace-nowrap">GSL &amp; Caucuses</span>
-            <span className="whitespace-nowrap">Projector Mode</span>
-          </nav>
           <button
             type="button"
             onClick={onEnterGuest}
