@@ -241,6 +241,20 @@ export function ResolutionsTab({
     setSpeechNote('');
   };
 
+  const handleSkipAndNext = async () => {
+    const [nextId = '', ...rest] = queue;
+    await onUpdateCaucus({
+      currentSpeakerId: nextId,
+      queue: rest,
+      speakerRemainingSeconds: defaultSpeakerSecs,
+      timerRunning: false,
+      yieldType: 'none',
+      yieldTargetId: '',
+      timerUpdatedAtMs: Date.now(),
+    });
+    setSpeechNote('');
+  };
+
   const handleRecordPoi = async () => {
     if (!currentSpeaker) return;
     const qId = poiQuestionerId || activeDelegates.find((d) => d.id !== currentSpeaker.id)?.id;
@@ -599,6 +613,16 @@ export function ResolutionsTab({
               >
                 <RotateCcw className="w-3.5 h-3.5" />
                 Reset
+              </button>
+
+              <button
+                type="button"
+                disabled={!currentSpeaker && queue.length === 0}
+                onClick={handleSkipAndNext}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 rounded-lg transition-colors cursor-pointer"
+              >
+                <SkipForward className="w-4 h-4" />
+                Skip Without Logging
               </button>
 
               <button

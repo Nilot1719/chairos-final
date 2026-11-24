@@ -67,7 +67,11 @@ import {
   guestUpdateQuorumRatio,
   subscribeGuestStore,
 } from '../lib/guestStore';
-import { computeQuorumMetrics, dedupeSpeakerQueue } from '../lib/munRules';
+import {
+  computeQuorumMetrics,
+  dedupeSpeakerQueue,
+  getResolutionSpeechCategoryLabel,
+} from '../lib/munRules';
 import { exportCommitteeCsv, exportCommitteePdf } from '../lib/exports';
 import type {
   ActivityLog,
@@ -389,12 +393,23 @@ export function CommitteeWorkspace({
         : 'gsl';
     const activeCaucus = caucusMap[modeKey];
     const isResReading = modeKey === 'resolutions' && activeCaucus?.subMode === 'reading';
+    const resolutionSpeechCategoryLabel = getResolutionSpeechCategoryLabel(
+      activeCaucus?.speechCategory
+    );
     const modeDisplayLabel =
       modeKey === 'resolutions'
         ? isResReading
           ? 'Resolutions · Reading/Amendment Writing'
-          : 'Resolutions · Speech Mode'
+          : `Resolutions · Speech Mode · ${resolutionSpeechCategoryLabel}`
         : modeLabels[tab];
+    const topic = activeCaucus?.topic || modeDisplayLabel;
+    const projectorTopic =
+      modeKey === 'resolutions' &&
+      !isResReading &&
+      topic === 'Main Submitter Speech' &&
+      activeCaucus?.speechCategory !== 'main_sub'
+        ? resolutionSpeechCategoryLabel
+        : topic;
     const delegateMap = new Map(delegates.map((d) => [d.id, d]));
     const currentSpeaker = activeCaucus?.currentSpeakerId
       ? delegateMap.get(activeCaucus.currentSpeakerId)
@@ -438,7 +453,7 @@ export function CommitteeWorkspace({
       sessionName: activeSession?.name || 'Session 1',
       activeTab: tab,
       modeDisplayLabel,
-      topic: activeCaucus?.topic || modeDisplayLabel,
+      topic: projectorTopic,
       totalSeconds: activeCaucus?.totalSeconds || 0,
       speakerSeconds: activeCaucus?.speakerSeconds || 0,
       totalRemainingSeconds: activeCaucus?.totalRemainingSeconds || 0,

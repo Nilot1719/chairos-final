@@ -2,7 +2,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { getGuestBundle, subscribeGuestStore } from '../lib/guestStore';
-import { computeQuorumMetrics, dedupeSpeakerQueue, formatClock } from '../lib/munRules';
+import {
+  computeQuorumMetrics,
+  dedupeSpeakerQueue,
+  formatClock,
+  getResolutionSpeechCategoryLabel,
+} from '../lib/munRules';
 import type {
   CaucusState,
   Delegate,
@@ -47,13 +52,24 @@ function buildSnapshotFromGuest(committeeId: string): ProjectorSnapshot | null {
       : 'gsl';
   const activeCaucus: CaucusState | undefined = caucuses[modeKey];
   const isResReading = modeKey === 'resolutions' && activeCaucus?.subMode === 'reading';
+  const resolutionSpeechCategoryLabel = getResolutionSpeechCategoryLabel(
+    activeCaucus?.speechCategory
+  );
 
   const modeDisplayLabel =
     modeKey === 'resolutions'
       ? isResReading
         ? 'Resolutions · Reading/Amendment Writing'
-        : 'Resolutions · Speech Mode'
+        : `Resolutions · Speech Mode · ${resolutionSpeechCategoryLabel}`
       : MODE_LABELS[activeTab];
+  const topic = activeCaucus?.topic || modeDisplayLabel;
+  const projectorTopic =
+    modeKey === 'resolutions' &&
+    !isResReading &&
+    topic === 'Main Submitter Speech' &&
+    activeCaucus?.speechCategory !== 'main_sub'
+      ? resolutionSpeechCategoryLabel
+      : topic;
 
   const delegateMap = new Map(delegates.map((d) => [d.id, d]));
   const currentSpeaker = activeCaucus?.currentSpeakerId
@@ -99,7 +115,7 @@ function buildSnapshotFromGuest(committeeId: string): ProjectorSnapshot | null {
     sessionName: activeSession?.name || 'Session 1',
     activeTab,
     modeDisplayLabel,
-    topic: activeCaucus?.topic || modeDisplayLabel,
+    topic: projectorTopic,
     totalSeconds: activeCaucus?.totalSeconds || 0,
     speakerSeconds: activeCaucus?.speakerSeconds || 0,
     totalRemainingSeconds: activeCaucus?.totalRemainingSeconds || 0,

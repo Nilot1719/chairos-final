@@ -20,6 +20,25 @@ export const RESOLUTION_SPEECH_CATEGORIES: Array<{
   { key: 'amendment_against', label: 'Amendment Against' },
 ];
 
+export function getResolutionSpeechCategoryLabel(
+  category: ResolutionSpeechCategory | undefined
+): string {
+  switch (category) {
+    case 'for':
+      return 'For Speech';
+    case 'against':
+      return 'Against Speech';
+    case 'to':
+      return 'To Speech';
+    case 'amendment_for':
+      return 'Amendment For Speech';
+    case 'amendment_against':
+      return 'Amendment Against Speech';
+    default:
+      return 'Main Submitter Speech';
+  }
+}
+
 export const BLUEPRINT_BOUNDS = {
   COMMITTEE_NAME_MAX: 120,
   DELEGATE_NAME_MAX: 100,
