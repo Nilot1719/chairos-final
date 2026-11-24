@@ -156,25 +156,25 @@ export function DelegateDetailsDrawer({
     return (
       <div
         key={item.key}
-        className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg flex flex-col items-center justify-between gap-1.5"
+        className="min-w-0 p-3 bg-slate-50 border border-slate-200 rounded-lg flex flex-col items-center justify-between gap-2"
       >
-        <div className="flex items-center justify-between w-full gap-1">
+        <div className="grid w-full grid-cols-[28px_minmax(0,1fr)_28px] items-center gap-2">
           <button
             type="button"
             onClick={() => setStatValue(item.key, val - 1)}
             aria-label={`Decrease ${item.label}`}
-            className="w-6 h-6 flex items-center justify-center rounded bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-slate-900 cursor-pointer shrink-0"
+            className="w-7 h-8 flex items-center justify-center rounded bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-slate-900 cursor-pointer"
           >
             <Minus className="w-3 h-3" />
           </button>
           <input
-            type="number"
-            min={0}
-            max={10000}
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
             aria-label={item.label}
             value={val}
             onChange={(e) => setStatValue(item.key, Number(e.target.value))}
-            className={`w-full min-w-0 text-center font-mono-tabular text-lg font-bold bg-transparent focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#0047AB] rounded py-0.5 ${
+            className={`block w-full min-w-0 px-1 text-center font-mono-tabular text-lg font-bold bg-transparent focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#0047AB] rounded py-0.5 ${
               item.accent || 'text-slate-900'
             }`}
           />
@@ -182,7 +182,7 @@ export function DelegateDetailsDrawer({
             type="button"
             onClick={() => setStatValue(item.key, val + 1)}
             aria-label={`Increase ${item.label}`}
-            className="w-6 h-6 flex items-center justify-center rounded bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-slate-900 cursor-pointer shrink-0"
+            className="w-7 h-8 flex items-center justify-center rounded bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-slate-900 cursor-pointer"
           >
             <Plus className="w-3 h-3" />
           </button>
@@ -281,7 +281,7 @@ export function DelegateDetailsDrawer({
                 </button>
               </div>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {CORE_STAT_FIELDS.map(renderStatTile)}
             </div>
           </div>
@@ -291,7 +291,7 @@ export function DelegateDetailsDrawer({
             <span className="block text-xs font-semibold text-slate-700">
               Resolutions &amp; Amendments
             </span>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {RESOLUTION_STAT_FIELDS.map(renderStatTile)}
             </div>
           </div>
